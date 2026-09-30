@@ -13,7 +13,7 @@ class DatabaseSeeder extends Seeder
             FeatureSeeder::class,
             RoleSeeder::class,
             SubscriptionPlanSeeder::class,
-            DemoDataSeeder::class,
+            PakistanDemoSeeder::class,
         ]);
     }
 }
