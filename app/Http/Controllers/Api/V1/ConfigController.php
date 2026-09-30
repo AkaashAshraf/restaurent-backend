@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\Restaurant;
+use App\Services\FeatureService;
+use App\Services\RestaurantResolver;
+use App\Support\ApiResponse;
+use App\Support\TenantContext;
+use Illuminate\Http\Request;
+
+/**
+ * Central config API (spec #41/#87/#124/#125). Generic employee apps and
+ * the white-label customer app/website all read restaurant branding,
+ * theme, currency and enabled features from here rather than hard-coding
+ * anything — this is what makes them reusable across restaurants.
+ */
+class ConfigController extends Controller
+{
+    public function __construct(
+        private FeatureService $features,
+        private TenantContext $tenant,
+        private RestaurantResolver $restaurants,
+    ) {
+    }
+
+    /**
+     * GET /api/v1/app/config — resolved from Host header or ?restaurant=
+     * slug. No auth required (a generic app needs this before login even
+     * exists on screen), so there is no authenticated user to derive a
+     * tenant from. Resolving the restaurant by domain/slug here IS the
+     * tenant-identification step for this endpoint, so once resolved we
+     * explicitly establish the TenantContext for it — otherwise the
+     * BelongsToTenant scope on Branch etc. would (correctly, by design)
+     * refuse to return anything for a request with no tenant context.
+     */
+    public function appConfig(Request $request)
+    {
+        $restaurant = $this->restaurants->resolve($request);
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant is configured for this server URL.', 404);
+        }
+
+        // This route has no `tenant` middleware (it's public, pre-login),
+        // so nothing else resets the context on a worker-reuse runtime —
+        // reset before setting, or a leaked bypass=true from an earlier
+        // Super Admin request in the same worker would skip tenant scoping
+        // entirely for this request. See TenantContext::reset().
+        $this->tenant->reset()->setRestaurantId($restaurant->id);
+
+        return ApiResponse::success($this->buildConfig($restaurant));
+    }
+
+    /** GET /api/v1/config — authenticated variant, resolves restaurant from the current user. */
+    public function config(Request $request)
+    {
+        $restaurant = $request->user()?->restaurant;
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant associated with this account.', 404);
+        }
+
+        return ApiResponse::success($this->buildConfig($restaurant, includeSettings: true));
+    }
+
+    private function buildConfig(Restaurant $restaurant, bool $includeSettings = false): array
+    {
+        $restaurant->loadMissing('settings', 'branches');
+
+        $config = [
+            'restaurant' => [
+                'id' => $restaurant->id,
+                'name' => $restaurant->name,
+                'logo' => $restaurant->logo,
+                'currency' => $restaurant->currency,
+                'timezone' => $restaurant->timezone,
+                'status' => $restaurant->status,
+            ],
+            'theme' => $restaurant->theme ?: [
+                'primaryColor' => '#E53935',
+                'secondaryColor' => '#212121',
+            ],
+            'branches' => $restaurant->branches->map(fn ($b) => [
+                'id' => $b->id,
+                'name' => $b->name,
+                'status' => $b->status,
+                'latitude' => $b->latitude,
+                'longitude' => $b->longitude,
+            ]),
+            'features' => array_fill_keys($this->features->enabledFeatureKeys($restaurant), true),
+            'app' => [
+                'minimum_version' => '1.0.0',
+                'latest_version' => '1.0.0',
+                'force_update' => false,
+            ],
+        ];
+
+        if ($includeSettings && $restaurant->settings) {
+            $config['ordering'] = $restaurant->settings->only([
+                'order_types', 'min_order_amount', 'default_prep_time_minutes',
+            ]);
+            $config['delivery'] = $restaurant->settings->only([
+                'delivery_enabled', 'delivery_fee', 'free_delivery_threshold',
+            ]);
+        }
+
+        return $config;
+    }
+}
