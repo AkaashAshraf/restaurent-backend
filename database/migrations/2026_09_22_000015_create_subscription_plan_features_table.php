@@ -14,7 +14,8 @@ return new class extends Migration
             $table->foreignId('feature_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
 
-            $table->unique(['subscription_plan_id', 'feature_id']);
+            // Explicit name: the default one is 65 characters, over MySQL's 64.
+            $table->unique(['subscription_plan_id', 'feature_id'], 'plan_features_plan_feature_unique');
         });
     }
 

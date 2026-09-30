@@ -39,7 +39,8 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['user_id', 'event_key', 'channel']);
-            $table->unique(['customer_id', 'event_key', 'channel']);
+            // Explicit name: the default one is 65 characters, over MySQL's 64.
+            $table->unique(['customer_id', 'event_key', 'channel'], 'notif_prefs_customer_event_channel_unique');
         });
 
         DB::statement(
