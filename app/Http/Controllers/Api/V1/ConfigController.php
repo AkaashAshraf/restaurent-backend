@@ -101,6 +101,13 @@ class ConfigController extends Controller
             $config['ordering'] = $restaurant->settings->only([
                 'order_types', 'min_order_amount', 'default_prep_time_minutes',
             ]);
+            $config['tax'] = [
+                'enabled' => (bool) $restaurant->settings->tax_enabled,
+                'cash_percentage' => $restaurant->settings->taxRateFor('CASH'),
+                'card_percentage' => $restaurant->settings->taxRateFor('CARD'),
+                'fbr_number' => $restaurant->settings->fbr_number,
+            ];
+            $config['kitchen'] = ['order_types' => $restaurant->settings->kitchenOrderTypes()];
             $config['delivery'] = $restaurant->settings->only([
                 'delivery_enabled', 'delivery_fee', 'free_delivery_threshold',
             ]);

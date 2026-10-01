@@ -315,7 +315,7 @@ class OrderHistory
         // Online orders are mostly prepaid by card through the app.
         $prepaid = $online && $this->random->getInt(1, 100) <= 35;
         if ($prepaid) {
-            $payment = $this->payments->record($order->fresh(), ['method' => 'ONLINE', 'amount' => $order->fresh()->outstandingBalance()]);
+            $payment = $this->payments->record($order->fresh(), ['method' => 'ONLINE']);
             $this->payments->confirm($payment);
         }
 
@@ -420,9 +420,10 @@ class OrderHistory
     private function pay(Order $order, string $method, User $by): void
     {
         $order = $order->fresh();
-        $amount = $order->outstandingBalance();
-        if ($amount > 0) {
-            $this->payments->record($order, ['method' => $method, 'amount' => $amount], $by);
+        if ($order->outstandingBalance() > 0) {
+            // No amount: PaymentService works out the tax for this method
+            // (cash / card rate) and takes what is left.
+            $this->payments->record($order, ['method' => $method], $by);
         }
     }
 

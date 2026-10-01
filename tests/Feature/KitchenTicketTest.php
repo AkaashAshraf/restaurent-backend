@@ -31,7 +31,10 @@ class KitchenTicketTest extends TestCase
             'name' => 'Butter Chicken', 'slug' => 'bc-'.uniqid(), 'base_price' => 10.00,
         ]);
 
-        $waiter = $this->makeBranchScopedUser($this->restaurant, $this->branch, 'waiter');
+        // Takeaway orders are the cashier's; a waiter can only place dine-in
+        // ones (see TaxAndKitchenSettingsTest). The test helpers keep calling
+        // this person "waiter" because they play the same part in the flow.
+        $waiter = $this->makeBranchScopedUser($this->restaurant, $this->branch, 'cashier');
         $waiter->update(['name' => 'Ravi']);
         $this->waiterToken = $this->actingAsUser($waiter);
         $this->kitchenToken = $this->actingAsUser($this->makeBranchScopedUser($this->restaurant, $this->branch, 'kitchen'));

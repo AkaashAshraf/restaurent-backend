@@ -107,9 +107,10 @@ class OrderService
         }
 
         $settings = $this->effectiveSettings($restaurant);
-        $taxAmount = $settings->tax_enabled
-            ? round($subtotal * ((float) $settings->tax_percentage / 100), 2)
-            : 0.0;
+        // Until the customer picks cash or card the bill shows the default rate;
+        // PaymentService re-works it with the chosen method's rate on first payment.
+        $taxRate = $settings->taxRateFor(null);
+        $taxAmount = round($subtotal * $taxRate / 100, 2);
         $deliveryFee = $orderType === OrderType::DELIVERY
             ? $this->resolveDeliveryFee($restaurant, $branch, $subtotal, $deliveryZone)
             : 0.0;
@@ -117,7 +118,7 @@ class OrderService
 
         $order = DB::transaction(function () use (
             $restaurant, $branch, $placedBy, $data, $orderType, $table, $customer,
-            $lineItems, $subtotal, $taxAmount, $deliveryFee, $totalAmount, $deliveryZone,
+            $lineItems, $subtotal, $taxAmount, $taxRate, $deliveryFee, $totalAmount, $deliveryZone,
             $coupon, $discountAmount
         ) {
             $order = Order::create([
@@ -131,6 +132,8 @@ class OrderService
                 'status' => OrderStatus::PENDING->value,
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
+                'tax_rate' => $taxRate,
+                'fbr_number' => $restaurant->settings?->fbr_number,
                 'delivery_fee' => $deliveryFee,
                 'discount_amount' => $discountAmount,
                 'total_amount' => $totalAmount,
@@ -492,10 +495,12 @@ class OrderService
     /** Recomputes tax/total from a new subtotal and persists all three — the one arithmetic path addItems()/returnItem() both funnel through, so it can never drift from createOrder()'s own math. */
     private function repriceOrder(Order $order, float $newSubtotal): void
     {
-        $settings = $this->effectiveSettings($order->restaurant);
-        $taxAmount = $settings->tax_enabled
-            ? round($newSubtotal * ((float) $settings->tax_percentage / 100), 2)
-            : 0.0;
+        // The rate this order already carries (it may have been fixed by the
+        // payment method); older orders without one use today's default.
+        $rate = $order->tax_rate !== null
+            ? (float) $order->tax_rate
+            : $this->effectiveSettings($order->restaurant)->taxRateFor(null);
+        $taxAmount = round($newSubtotal * $rate / 100, 2);
         $totalAmount = max(0.0, round($newSubtotal + $taxAmount + (float) $order->delivery_fee - (float) $order->discount_amount, 2));
 
         $order->update([

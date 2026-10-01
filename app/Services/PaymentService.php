@@ -43,7 +43,13 @@ class PaymentService
             throw new PaymentException('Cannot record a payment against a cancelled order.');
         }
 
-        $amount = round((float) $data['amount'], 2);
+        // The tax depends on how the customer pays, so it is worked out here,
+        // when the first payment is taken — and fixed from then on.
+        $order = $this->applyMethodTax($order, $method);
+
+        // No amount = pay what is left (the usual case at checkout, and the one
+        // that can't go wrong when the tax has just changed the total).
+        $amount = round((float) ($data['amount'] ?? $order->outstandingBalance()), 2);
         if ($amount <= 0) {
             throw new PaymentException('Payment amount must be greater than zero.');
         }
@@ -80,6 +86,36 @@ class PaymentService
         }
 
         return $payment;
+    }
+
+    /**
+     * Re-works the order's tax with the rate for [$method] (restaurant
+     * settings: cash tax / card tax) — only for the first payment on the
+     * order. After that the tax is fixed, so a split bill can't change it.
+     */
+    private function applyMethodTax(Order $order, PaymentMethod $method): Order
+    {
+        $alreadyPaying = $order->tax_method !== null
+            || $order->payments()->whereIn('status', [PaymentStatus::PAID->value, PaymentStatus::PENDING->value])->exists();
+
+        if ($alreadyPaying) {
+            return $order;
+        }
+
+        $settings = $order->restaurant?->settings;
+        $rate = $settings ? $settings->taxRateFor($method->value) : (float) ($order->tax_rate ?? 0);
+        $tax = round((float) $order->subtotal * $rate / 100, 2);
+        $total = max(0.0, round((float) $order->subtotal + $tax + (float) $order->delivery_fee - (float) $order->discount_amount, 2));
+
+        $order->update([
+            'tax_rate' => $rate,
+            'tax_amount' => $tax,
+            'total_amount' => $total,
+            // ONLINE is taxed like a card payment.
+            'tax_method' => $method === PaymentMethod::CASH ? 'CASH' : 'CARD',
+        ]);
+
+        return $order->fresh();
     }
 
     /** Stands in for a gateway's success webhook/redirect callback. */

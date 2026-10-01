@@ -34,7 +34,7 @@ class CustomerPaymentController extends Controller
         $order = Order::where('customer_id', $request->user()->id)->findOrFail($order);
 
         $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
         ]);
         $data['method'] = 'ONLINE';
 

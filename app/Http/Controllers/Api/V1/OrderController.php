@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\OrderStatus;
+use App\Exceptions\OrderValidationException;
 use App\Exceptions\PermissionDeniedException;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
@@ -84,6 +85,16 @@ class OrderController extends Controller
     {
         $restaurant = $request->user()->restaurant;
 
+        // A waiter only takes orders at the table, so theirs are always
+        // dine-in: no need to send an order type, and no other one is accepted.
+        $roles = $request->user()->roles;
+        if ($roles->isNotEmpty() && $roles->every(fn ($role) => $role->slug === 'waiter')) {
+            if ($request->filled('order_type') && $request->input('order_type') !== 'DINE_IN') {
+                throw new OrderValidationException('Waiters can only place dine-in orders.');
+            }
+            $request->merge(['order_type' => 'DINE_IN']);
+        }
+
         $data = $request->validate([
             'branch_id' => ['required', 'integer'],
             'order_type' => ['required', 'in:DINE_IN,TAKEAWAY,DELIVERY'],
@@ -119,7 +130,7 @@ class OrderController extends Controller
             'created_at' => now(),
         ]);
 
-        return ApiResponse::success($order->load('items.modifiers', 'table', 'deliveryZone', 'coupon'), 201);
+        return ApiResponse::success($order->load('items.modifiers', 'table', 'deliveryZone', 'coupon')->append('tax_options'), 201);
     }
 
     /**
@@ -209,7 +220,7 @@ class OrderController extends Controller
         return ApiResponse::success($order->load(
             'items.modifiers', 'items.returns', 'table', 'customer', 'placedBy', 'deliveryZone',
             'assignedRider', 'coupon', 'payments', 'kitchenTickets:id,order_id,sequence,status,ready_at,picked_up_at'
-        ));
+        )->append('tax_options'));
     }
 
     public function updateStatus(Request $request, int $order)

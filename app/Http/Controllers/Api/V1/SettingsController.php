@@ -72,12 +72,32 @@ class SettingsController extends Controller
             'tax_enabled' => ['sometimes', 'boolean'],
             'tax_percentage' => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'tax_inclusive' => ['sometimes', 'boolean'],
+            // Tax by payment method — what the restaurant charges on cash and on card.
+            'cash_tax_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'card_tax_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            // Which kinds of orders the kitchen screen receives.
+            'kitchen_order_types' => ['sometimes', 'array', 'min:1'],
+            'kitchen_order_types.*' => ['in:DINE_IN,TAKEAWAY,DELIVERY'],
+            // Printed on every bill.
+            'fbr_number' => ['nullable', 'string', 'max:60'],
             'delivery_enabled' => ['sometimes', 'boolean'],
             'delivery_fee' => ['sometimes', 'numeric', 'min:0'],
             'free_delivery_threshold' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $settings = $restaurant->settings()->firstOrCreate([]);
+
+        // The single "tax_percentage" stays as the rate used before the customer
+        // picks how to pay — keep it in step with the cash rate.
+        if (array_key_exists('cash_tax_percentage', $data) && $data['cash_tax_percentage'] !== null) {
+            $data['tax_percentage'] = $data['cash_tax_percentage'];
+        } elseif (array_key_exists('tax_percentage', $data) && ! array_key_exists('cash_tax_percentage', $data)) {
+            $data['cash_tax_percentage'] = $data['tax_percentage'];
+        }
+        if (array_key_exists('kitchen_order_types', $data)) {
+            $data['kitchen_order_types'] = array_values(array_unique($data['kitchen_order_types']));
+        }
+
         $settings->update($data);
 
         return ApiResponse::success($settings->fresh());

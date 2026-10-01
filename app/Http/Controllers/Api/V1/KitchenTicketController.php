@@ -31,7 +31,8 @@ class KitchenTicketController extends Controller
 
     /**
      * ?status=PENDING,CONFIRMED,PREPARING,READY (the default: everything
-     * still in the kitchen). Oldest first — the order the kitchen works in.
+     * still in the kitchen; add PICKED_UP for the last 12 hours of collected
+     * tickets). Oldest first — the order the kitchen works in.
      */
     public function index(Request $request)
     {
@@ -50,7 +51,22 @@ class KitchenTicketController extends Controller
             'trim',
             explode(',', (string) $request->query('status', 'PENDING,CONFIRMED,PREPARING,READY'))
         )));
-        $query->whereIn('status', $statuses);
+        // Picked-up tickets are history — only the last few hours, so the
+        // screen's "Picked up" tab stays short.
+        $query->where(function ($q) use ($statuses) {
+            $q->whereIn('status', array_values(array_diff($statuses, [KitchenTicketStatus::PICKED_UP->value])));
+            if (in_array(KitchenTicketStatus::PICKED_UP->value, $statuses, true)) {
+                $q->orWhere(fn ($w) => $w->where('status', KitchenTicketStatus::PICKED_UP->value)
+                    ->where('picked_up_at', '>=', now()->subHours(12)));
+            }
+        });
+
+        // The restaurant decides which kinds of orders reach the kitchen
+        // (e.g. only dine-in, with takeaway and delivery handled elsewhere).
+        $kitchenTypes = $user->restaurant?->settings?->kitchenOrderTypes();
+        if ($kitchenTypes !== null && count($kitchenTypes) < 3) {
+            $query->whereHas('order', fn ($o) => $o->whereIn('order_type', $kitchenTypes));
+        }
 
         return ApiResponse::success($query->orderBy('created_at')->orderBy('id')->get());
     }

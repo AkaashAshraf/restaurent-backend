@@ -43,7 +43,7 @@ class PaymentController extends Controller
 
         $data = $request->validate([
             'method' => ['required', Rule::in(['CASH', 'CARD', 'ONLINE'])],
-            'amount' => ['required', 'numeric', 'min:0.01'],
+            'amount' => ['nullable', 'numeric', 'min:0.01'],
             'transaction_reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string'],
         ]);
