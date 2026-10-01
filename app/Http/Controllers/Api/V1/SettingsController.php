@@ -36,7 +36,7 @@ class SettingsController extends Controller
             'city' => ['nullable', 'string'],
             'country' => ['nullable', 'string'],
             'currency' => ['sometimes', 'string', 'size:3'],
-            'timezone' => ['sometimes', 'string'],
+            'timezone' => ['sometimes', 'timezone:all'],
             'theme' => ['nullable', 'array'],
             'theme.primaryColor' => ['nullable', 'string'],
             'theme.secondaryColor' => ['nullable', 'string'],

@@ -170,6 +170,17 @@ class BranchHoursTest extends TestCase
         $this->assertFalse($this->service()->isOpen($branch, 'GENERAL', 'UTC'));
     }
 
+    public function test_a_bad_stored_timezone_falls_back_to_utc_instead_of_failing(): void
+    {
+        [$restaurant, $branch] = $this->makeRestaurantWithOwner('Odd Tz Co');
+        $restaurant->forceFill(['timezone' => 'Not/AZone'])->save();
+        $this->setHours($branch, ['GENERAL' => $this->week('12:00', '23:00')]);
+
+        $this->at('2026-10-05 13:00');
+        $this->assertTrue($this->service()->isOpen($branch, 'GENERAL', 'Not/AZone'));
+        $this->getJson('/api/v1/app/hours?restaurant='.$restaurant->slug)->assertOk()->assertJsonPath('data.timezone', 'UTC');
+    }
+
     // ---- management API ---------------------------------------------------
 
     public function test_owner_sets_and_reads_hours_and_a_service_can_be_reset_to_follow_the_branch(): void

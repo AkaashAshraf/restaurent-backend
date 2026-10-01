@@ -35,7 +35,7 @@ class RestaurantController extends Controller
             'email' => ['nullable', 'email'],
             'phone' => ['nullable', 'string', 'max:50'],
             'currency' => ['sometimes', 'string', 'size:3'],
-            'timezone' => ['sometimes', 'string'],
+            'timezone' => ['sometimes', 'timezone:all'],
             'owner_name' => ['required', 'string', 'max:255'],
             'owner_email' => ['required', 'email', 'unique:users,email'],
             'owner_password' => ['required', 'string', 'min:8'],
@@ -105,7 +105,7 @@ class RestaurantController extends Controller
             'email' => ['nullable', 'email'],
             'phone' => ['nullable', 'string', 'max:50'],
             'currency' => ['sometimes', 'string', 'size:3'],
-            'timezone' => ['sometimes', 'string'],
+            'timezone' => ['sometimes', 'timezone:all'],
         ]);
 
         $restaurant->update($data);

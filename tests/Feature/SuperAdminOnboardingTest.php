@@ -60,4 +60,24 @@ class SuperAdminOnboardingTest extends TestCase
         $this->assertSame(2, $response->json('data.total_restaurants'));
         $this->assertSame(1, $response->json('data.active_restaurants'));
     }
+
+    public function test_super_admin_sets_a_restaurants_timezone_and_bad_ones_are_rejected(): void
+    {
+        $token = $this->actingAsUser($this->makeSuperAdmin());
+        $base = [
+            'name' => 'Karachi Grill', 'owner_name' => 'Owner', 'owner_email' => 'o@karachi.test', 'owner_password' => 'password123',
+        ];
+
+        $this->withUserToken($token)->postJson('/api/v1/super-admin/restaurants', $base + ['timezone' => 'Mars/Olympus'])
+            ->assertStatus(422);
+
+        $id = $this->withUserToken($token)->postJson('/api/v1/super-admin/restaurants', $base + ['timezone' => 'Asia/Karachi'])
+            ->assertStatus(201)->json('data.restaurant.id');
+        $this->assertSame('Asia/Karachi', \App\Models\Restaurant::find($id)->timezone);
+
+        $this->withUserToken($token)->patchJson("/api/v1/super-admin/restaurants/{$id}", ['timezone' => 'Nowhere'])
+            ->assertStatus(422);
+        $this->withUserToken($token)->patchJson("/api/v1/super-admin/restaurants/{$id}", ['timezone' => 'Asia/Dubai'])
+            ->assertOk()->assertJsonPath('data.timezone', 'Asia/Dubai');
+    }
 }

@@ -132,7 +132,7 @@ class ConfigController extends Controller
             ->filter(fn ($type) => $this->features->isEnabled($restaurant, $type))
             ->values()
             ->all();
-        $timezone = $restaurant->timezone ?: 'UTC';
+        $timezone = in_array($restaurant->timezone, \DateTimeZone::listIdentifiers(), true) ? $restaurant->timezone : 'UTC';
 
         $branches = Branch::where('status', 'ACTIVE')
             ->when($data['branch_id'] ?? null, fn ($q, $id) => $q->where('id', $id))

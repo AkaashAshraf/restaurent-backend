@@ -242,13 +242,19 @@ class BranchHoursService
 
     private function now(?CarbonInterface $now, string $timezone): CarbonImmutable
     {
-        $tz = new DateTimeZone($timezone ?: 'UTC');
+        $tz = new DateTimeZone($this->safeTimezone($timezone));
 
         return ($now ? CarbonImmutable::instance($now) : CarbonImmutable::now())->setTimezone($tz);
     }
 
     private function iso(int $timestamp, string $timezone): string
     {
-        return CarbonImmutable::createFromTimestamp($timestamp, $timezone ?: 'UTC')->toIso8601String();
+        return CarbonImmutable::createFromTimestamp($timestamp, $this->safeTimezone($timezone))->toIso8601String();
+    }
+
+    /** A bad or empty stored timezone must never take opening hours down — fall back to UTC. */
+    private function safeTimezone(?string $timezone): string
+    {
+        return $timezone && in_array($timezone, DateTimeZone::listIdentifiers(DateTimeZone::ALL), true) ? $timezone : 'UTC';
     }
 }
