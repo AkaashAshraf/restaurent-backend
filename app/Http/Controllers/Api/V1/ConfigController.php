@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
 use App\Models\Branch;
+use App\Services\BranchHoursService;
 use App\Services\FeatureService;
 use App\Services\OrderService;
 use App\Services\RestaurantResolver;
@@ -105,6 +106,57 @@ class ConfigController extends Controller
             ->get(['id', 'branch_id', 'table_number', 'section', 'capacity']);
 
         return ApiResponse::success($tables);
+    }
+
+    /**
+     * GET /api/v1/app/hours[?branch_id=] — opening hours of every active
+     * branch (or one), so a customer can see when each branch is open and
+     * when it takes dine-in, takeaway and delivery orders. Public. Each
+     * service carries its weekly days, whether it has its own hours
+     * (`custom`) or follows the branch's, and whether it is open right now.
+     */
+    public function appHours(Request $request, BranchHoursService $hours)
+    {
+        $restaurant = $this->restaurants->resolve($request);
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant is configured for this server URL.', 404);
+        }
+
+        $this->tenant->reset()->setRestaurantId($restaurant->id);
+
+        $data = $request->validate(['branch_id' => ['nullable', 'integer']]);
+
+        $restaurant->loadMissing('settings');
+        $types = collect($restaurant->settings?->order_types ?? ['DINE_IN', 'TAKEAWAY'])
+            ->filter(fn ($type) => $this->features->isEnabled($restaurant, $type))
+            ->values()
+            ->all();
+        $timezone = $restaurant->timezone ?: 'UTC';
+
+        $branches = Branch::where('status', 'ACTIVE')
+            ->when($data['branch_id'] ?? null, fn ($q, $id) => $q->where('id', $id))
+            ->orderBy('priority')
+            ->get()
+            ->map(fn (Branch $branch) => [
+                'id' => $branch->id,
+                'name' => $branch->name,
+                'address' => $branch->address,
+                'city' => $branch->city,
+                'phone' => $branch->phone,
+            ] + $hours->describe($branch, $timezone, null, $types))
+            ->values();
+
+        $now = \Carbon\CarbonImmutable::now($timezone);
+
+        return ApiResponse::success([
+            'timezone' => $timezone,
+            // The restaurant's own clock, so the app can highlight "today".
+            'now' => $now->toIso8601String(),
+            'today' => $now->dayOfWeek,
+            'order_types' => $types,
+            'branches' => $branches,
+        ]);
     }
 
     /**

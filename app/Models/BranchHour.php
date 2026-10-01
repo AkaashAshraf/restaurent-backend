@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BranchHour extends Model
 {
     protected $fillable = [
-        'branch_id', 'restaurant_id', 'day_of_week', 'open_time', 'close_time',
+        'branch_id', 'restaurant_id', 'service', 'day_of_week', 'open_time', 'close_time',
         'is_closed', 'is_24_hours',
     ];
 

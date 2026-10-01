@@ -7,6 +7,8 @@ use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\CustomerAddress;
 use App\Models\Order;
+use App\Exceptions\OrderValidationException;
+use App\Services\BranchHoursService;
 use App\Services\OrderService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -20,7 +22,7 @@ use Illuminate\Http\Request;
  */
 class CustomerOrderController extends Controller
 {
-    public function __construct(private OrderService $orders)
+    public function __construct(private OrderService $orders, private BranchHoursService $hours)
     {
     }
 
@@ -80,6 +82,19 @@ class CustomerOrderController extends Controller
         }
 
         $branch = Branch::findOrFail($data['branch_id']);
+
+        // A customer can only order while the branch takes that kind of order.
+        // (Staff keep the till open — they place orders through OrderController.)
+        $timezone = $restaurant->timezone ?: 'UTC';
+        $status = $this->hours->status($branch, $data['order_type'], $timezone);
+        if (! $status['is_open']) {
+            $label = ['DINE_IN' => 'Dine-in', 'TAKEAWAY' => 'Takeaway', 'DELIVERY' => 'Delivery'][$data['order_type']];
+            $opens = $status['opens_at']
+                ? ' It opens '.\Carbon\CarbonImmutable::parse($status['opens_at'])->format('D g:i A').'.'
+                : '';
+
+            throw new OrderValidationException("{$label} is closed at {$branch->name} right now.{$opens}");
+        }
 
         $order = $this->orders->createOrder($restaurant, $branch, null, $data, $customer);
 

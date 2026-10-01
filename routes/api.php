@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AuditLogController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BranchController;
+use App\Http\Controllers\Api\V1\BranchHoursController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\CouponController;
@@ -41,6 +42,7 @@ Route::prefix('v1')->group(function () {
     Route::get('app/menu', [MenuController::class, 'publicMenu']);
     Route::get('app/tables', [ConfigController::class, 'appTables']);
     Route::get('app/delivery-quote', [ConfigController::class, 'appDeliveryQuote']);
+    Route::get('app/hours', [ConfigController::class, 'appHours']);
 
     Route::post('auth/login', [AuthController::class, 'login']);
 
@@ -173,11 +175,13 @@ Route::prefix('v1')->group(function () {
                 Route::middleware('permission:branches.view')->group(function () {
                     Route::get('branches', [BranchController::class, 'index']);
                     Route::get('branches/{branch}', [BranchController::class, 'show'])->middleware('branch.access:branch');
+                    Route::get('branches/{branch}/hours', [BranchHoursController::class, 'show'])->middleware('branch.access:branch');
                 });
                 Route::middleware('permission:branches.create')->post('branches', [BranchController::class, 'store']);
                 Route::middleware(['permission:branches.update', 'branch.access:branch'])->group(function () {
                     Route::patch('branches/{branch}', [BranchController::class, 'update']);
                     Route::patch('branches/{branch}/status', [BranchController::class, 'updateStatus']);
+                    Route::put('branches/{branch}/hours', [BranchHoursController::class, 'update']);
                     Route::patch('branches/{branch}/settings', [SettingsController::class, 'updateBranchSettings']);
                 });
 

@@ -144,17 +144,28 @@ class RestaurantBuilder
             );
 
             // 0 = Sunday .. 6 = Saturday. Friday and Saturday nights run late.
-            foreach (range(0, 6) as $day) {
-                BranchHour::updateOrCreate(
-                    ['branch_id' => $branch->id, 'day_of_week' => $day],
-                    [
-                        'restaurant_id' => $restaurant->id,
-                        'open_time' => $b['hours']['open'],
-                        'close_time' => in_array($day, [5, 6], true) ? $b['hours']['weekend_close'] : $b['hours']['close'],
-                        'is_closed' => false,
-                        'is_24_hours' => false,
-                    ]
-                );
+            // 'hours' are the branch's general hours; an optional per-service
+            // entry ('dine_in', 'takeaway', 'delivery') overrides them for that
+            // kind of order.
+            $weekendDays = [5, 6];
+            $schedules = ['GENERAL' => $b['hours']] + array_filter([
+                'DINE_IN' => $b['hours']['dine_in'] ?? null,
+                'TAKEAWAY' => $b['hours']['takeaway'] ?? null,
+                'DELIVERY' => $b['hours']['delivery'] ?? null,
+            ]);
+            foreach ($schedules as $service => $h) {
+                foreach (range(0, 6) as $day) {
+                    BranchHour::updateOrCreate(
+                        ['branch_id' => $branch->id, 'service' => $service, 'day_of_week' => $day],
+                        [
+                            'restaurant_id' => $restaurant->id,
+                            'open_time' => $h['open'],
+                            'close_time' => in_array($day, $weekendDays, true) ? ($h['weekend_close'] ?? $h['close']) : $h['close'],
+                            'is_closed' => false,
+                            'is_24_hours' => false,
+                        ]
+                    );
+                }
             }
 
             // Inner zone first: GeofencingService picks the first (lowest id) zone that contains the address.

@@ -100,7 +100,10 @@ class SpiceRoute
                     'longitude' => 67.0664,
                     'priority' => 10,
                     'settings' => ['prep_time_minutes' => 25, 'max_delivery_distance_km' => 8],
-                    'hours' => ['open' => '12:00', 'close' => '00:30', 'weekend_close' => '01:30'],
+                    'hours' => [
+                        'open' => '12:00', 'close' => '00:30', 'weekend_close' => '01:30',
+                        'delivery' => ['open' => '12:30', 'close' => '23:30', 'weekend_close' => '00:30'],
+                    ],
                     'zones' => [
                         ['name' => 'DHA & Clifton — standard', 'radius_km' => 5, 'fee' => null],
                         ['name' => 'Extended (5–8 km)', 'radius_km' => 8, 'fee' => 250],
@@ -137,7 +140,11 @@ class SpiceRoute
                     'longitude' => 67.0306,
                     'priority' => 20,
                     'settings' => ['prep_time_minutes' => 25, 'max_delivery_distance_km' => 7],
-                    'hours' => ['open' => '12:30', 'close' => '00:00', 'weekend_close' => '01:00'],
+                    'hours' => [
+                        'open' => '12:30', 'close' => '00:00', 'weekend_close' => '01:00',
+                        'delivery' => ['open' => '13:00', 'close' => '23:30', 'weekend_close' => '00:30'],
+                        'takeaway' => ['open' => '12:30', 'close' => '23:30', 'weekend_close' => '00:30'],
+                    ],
                     'zones' => [
                         ['name' => 'Clifton & Saddar — standard', 'radius_km' => 5, 'fee' => null],
                         ['name' => 'Extended (5–7 km)', 'radius_km' => 7, 'fee' => 250],

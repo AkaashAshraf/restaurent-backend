@@ -98,7 +98,10 @@ class StackAndBun
                     'longitude' => 74.3440,
                     'priority' => 10,
                     'settings' => ['prep_time_minutes' => 15, 'max_delivery_distance_km' => 9],
-                    'hours' => ['open' => '12:00', 'close' => '02:00', 'weekend_close' => '03:00'],
+                    'hours' => [
+                        'open' => '12:00', 'close' => '02:00', 'weekend_close' => '03:00',
+                        'delivery' => ['open' => '12:00', 'close' => '01:00', 'weekend_close' => '02:00'],
+                    ],
                     'zones' => [
                         ['name' => 'Gulberg, Model Town & Shadman — standard', 'radius_km' => 6, 'fee' => null],
                         ['name' => 'Extended (6–9 km)', 'radius_km' => 9, 'fee' => 299],
@@ -133,7 +136,10 @@ class StackAndBun
                     'longitude' => 74.4085,
                     'priority' => 20,
                     'settings' => ['prep_time_minutes' => 15, 'max_delivery_distance_km' => 10],
-                    'hours' => ['open' => '12:00', 'close' => '01:00', 'weekend_close' => '02:30'],
+                    'hours' => [
+                        'open' => '12:00', 'close' => '01:00', 'weekend_close' => '02:30',
+                        'delivery' => ['open' => '12:00', 'close' => '00:00', 'weekend_close' => '01:30'],
+                    ],
                     'zones' => [
                         ['name' => 'DHA Phases 1–6 — standard', 'radius_km' => 7, 'fee' => null],
                         ['name' => 'Extended (7–10 km)', 'radius_km' => 10, 'fee' => 299],
