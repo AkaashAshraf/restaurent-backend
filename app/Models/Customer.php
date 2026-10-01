@@ -41,7 +41,7 @@ class Customer extends Authenticatable
     use HasFactory, SoftDeletes, HasApiTokens, Notifiable;
 
     protected $fillable = [
-        'restaurant_id', 'name', 'phone', 'email', 'password', 'status',
+        'restaurant_id', 'name', 'phone', 'email', 'google_id', 'apple_id', 'password', 'status',
     ];
 
     protected $hidden = ['password'];

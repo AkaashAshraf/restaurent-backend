@@ -59,6 +59,12 @@ class CustomerAppBranding
             'social.website' => ['nullable', 'string', 'max:255'],
             'android_package_id' => ['nullable', 'regex:/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/'],
             'ios_bundle_id' => ['nullable', 'regex:/^[A-Za-z0-9][A-Za-z0-9\-.]*$/', 'max:120'],
+            // "Continue with Google": the OAuth client ids of this restaurant's own app.
+            // Web client id = the one the app asks Google to issue the token for (also
+            // used on Android); iOS client id is only needed on iPhones. "Sign in with
+            // Apple" needs no extra id — it uses ios_bundle_id above.
+            'google_web_client_id' => ['nullable', 'regex:/^[0-9A-Za-z._\-]+\.apps\.googleusercontent\.com$/', 'max:200'],
+            'google_ios_client_id' => ['nullable', 'regex:/^[0-9A-Za-z._\-]+\.apps\.googleusercontent\.com$/', 'max:200'],
             'min_app_version' => ['nullable', 'regex:/^\d+\.\d+\.\d+$/'],
             'force_update' => ['nullable', 'boolean'],
             'maintenance_mode' => ['nullable', 'boolean'],

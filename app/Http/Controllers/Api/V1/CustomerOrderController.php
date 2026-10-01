@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Exceptions\OrderValidationException;
+use App\Exceptions\PhoneRequiredException;
 use App\Services\BranchHoursService;
 use App\Services\OrderService;
 use App\Support\ApiResponse;
@@ -55,6 +56,12 @@ class CustomerOrderController extends Controller
     {
         $customer = $request->user();
         $restaurant = $customer->restaurant;
+
+        // Signed in with Google / Apple and no number yet: the restaurant has to
+        // be able to reach them about the order.
+        if (blank($customer->phone)) {
+            throw new PhoneRequiredException();
+        }
 
         $data = $request->validate([
             'branch_id' => ['required', 'integer'],

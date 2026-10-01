@@ -52,6 +52,8 @@ Route::prefix('v1')->group(function () {
     // tenant-known ahead of login the way a User is.
     Route::post('app/auth/register', [CustomerAuthController::class, 'register']);
     Route::post('app/auth/login', [CustomerAuthController::class, 'login']);
+    Route::post('app/auth/google', [CustomerAuthController::class, 'google']);
+    Route::post('app/auth/apple', [CustomerAuthController::class, 'apple']);
 
     // A Customer authenticates via the same Sanctum guard as staff, but
     // `customer.guard` keeps a staff bearer token from ever reaching (or
@@ -60,6 +62,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'customer.guard'])->prefix('customer')->group(function () {
         Route::post('auth/logout', [CustomerAuthController::class, 'logout']);
         Route::get('me', [CustomerAuthController::class, 'me']);
+        Route::put('phone', [CustomerAuthController::class, 'updatePhone']);
 
         Route::middleware(['tenant', 'restaurant.active', 'subscription.active', 'feature:CUSTOMER_APP'])->group(function () {
             Route::get('addresses', [CustomerAddressController::class, 'index']);

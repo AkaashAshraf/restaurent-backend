@@ -77,6 +77,16 @@ class ConfigController extends Controller
         $config['branches'] = collect($config['branches'])->map(
             fn ($b) => $b + ['has_delivery_zones' => in_array($b['id'], $zoneBranchIds, true)]
         )->values()->all();
+        // Which sign-in options the app should offer (set by the super admin).
+        $branding = $restaurant->app_branding ?: [];
+        $config['auth'] = [
+            'google' => [
+                'enabled' => filled($branding['google_web_client_id'] ?? null),
+                'web_client_id' => $branding['google_web_client_id'] ?? null,
+                'ios_client_id' => $branding['google_ios_client_id'] ?? null,
+            ],
+            'apple' => ['enabled' => filled($branding['ios_bundle_id'] ?? null)],
+        ];
         $config['restaurant']['operational'] = $restaurant->isOperational();
         $config['restaurant']['description'] = $restaurant->description;
         $config['restaurant']['phone'] = $restaurant->phone;
