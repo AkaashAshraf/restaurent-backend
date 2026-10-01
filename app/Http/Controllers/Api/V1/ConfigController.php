@@ -7,6 +7,7 @@ use App\Models\Restaurant;
 use App\Services\FeatureService;
 use App\Services\RestaurantResolver;
 use App\Support\ApiResponse;
+use App\Support\CustomerAppBranding;
 use App\Support\TenantContext;
 use Illuminate\Http\Request;
 
@@ -50,7 +51,52 @@ class ConfigController extends Controller
         // entirely for this request. See TenantContext::reset().
         $this->tenant->reset()->setRestaurantId($restaurant->id);
 
-        return ApiResponse::success($this->buildConfig($restaurant));
+        $config = $this->buildConfig($restaurant);
+
+        // The customer app's look (name, colours, logo, banners...) and the
+        // ordering rules it needs before login — public, so only what a
+        // customer would see anyway.
+        $config['branding'] = CustomerAppBranding::resolve($restaurant);
+        $settings = $restaurant->settings;
+        $config['ordering'] = [
+            'order_types' => $settings?->order_types ?? ['DINE_IN', 'TAKEAWAY'],
+            'min_order_amount' => (float) ($settings?->min_order_amount ?? 0),
+            'delivery_enabled' => (bool) ($settings?->delivery_enabled ?? false),
+            'delivery_fee' => (float) ($settings?->delivery_fee ?? 0),
+            'free_delivery_threshold' => $settings?->free_delivery_threshold !== null ? (float) $settings->free_delivery_threshold : null,
+            // Customers pay online, which is charged the card rate.
+            'tax_enabled' => (bool) ($settings?->tax_enabled ?? false),
+            'online_tax_percentage' => $settings ? $settings->taxRateFor('ONLINE') : 0,
+        ];
+        $config['restaurant']['operational'] = $restaurant->isOperational();
+        $config['restaurant']['description'] = $restaurant->description;
+        $config['restaurant']['phone'] = $restaurant->phone;
+        $config['restaurant']['address'] = $restaurant->address;
+
+        return ApiResponse::success($config);
+    }
+
+    /**
+     * GET /api/v1/app/tables?branch_id= — a branch's tables, so a customer
+     * ordering dine-in can say which one they're sitting at.
+     */
+    public function appTables(Request $request)
+    {
+        $restaurant = $this->restaurants->resolve($request);
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant is configured for this server URL.', 404);
+        }
+
+        $this->tenant->reset()->setRestaurantId($restaurant->id);
+
+        $data = $request->validate(['branch_id' => ['required', 'integer']]);
+
+        $tables = \App\Models\Table::where('branch_id', $data['branch_id'])
+            ->orderBy('table_number')
+            ->get(['id', 'branch_id', 'table_number', 'section', 'capacity']);
+
+        return ApiResponse::success($tables);
     }
 
     /** GET /api/v1/config — authenticated variant, resolves restaurant from the current user. */

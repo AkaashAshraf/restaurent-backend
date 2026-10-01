@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RoleController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TableController;
+use App\Http\Controllers\Api\V1\SuperAdmin\CustomerAppController;
 use App\Http\Controllers\Api\V1\SuperAdmin\DashboardController;
 use App\Http\Controllers\Api\V1\SuperAdmin\FeatureController;
 use App\Http\Controllers\Api\V1\SuperAdmin\RestaurantController;
@@ -38,6 +39,7 @@ Route::prefix('v1')->group(function () {
     // Public: generic apps configure a Base URL, then hit this before login.
     Route::get('app/config', [ConfigController::class, 'appConfig']);
     Route::get('app/menu', [MenuController::class, 'publicMenu']);
+    Route::get('app/tables', [ConfigController::class, 'appTables']);
 
     Route::post('auth/login', [AuthController::class, 'login']);
 
@@ -142,6 +144,13 @@ Route::prefix('v1')->group(function () {
             Route::patch('restaurants/{restaurant}', [RestaurantController::class, 'update']);
             Route::patch('restaurants/{restaurant}/status', [RestaurantController::class, 'updateStatus']);
             Route::patch('restaurants/{restaurant}/features/{feature}', [RestaurantController::class, 'toggleFeatureOverride']);
+
+            // The restaurant's own white-label customer app: its key and branding.
+            Route::get('restaurants/{restaurant}/customer-app', [CustomerAppController::class, 'show']);
+            Route::put('restaurants/{restaurant}/customer-app/branding', [CustomerAppController::class, 'updateBranding']);
+            Route::post('restaurants/{restaurant}/customer-app/key', [CustomerAppController::class, 'generateKey']);
+            Route::delete('restaurants/{restaurant}/customer-app/key', [CustomerAppController::class, 'revokeKey']);
+            Route::post('restaurants/{restaurant}/customer-app/assets', [CustomerAppController::class, 'uploadAsset']);
 
             Route::get('subscription-plans', [SubscriptionPlanController::class, 'index']);
             Route::post('subscription-plans', [SubscriptionPlanController::class, 'store']);

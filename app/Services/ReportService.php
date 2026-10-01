@@ -63,6 +63,21 @@ class ReportService
             ->keyBy('order_type')
             ->map(fn ($row) => ['count' => (int) $row->count, 'revenue' => round((float) $row->revenue, 2)]);
 
+        // One point per day, for the dashboard's revenue chart (cancelled
+        // orders excluded, same as the revenue figures above).
+        $byDay = $this->scopedOrders($restaurant, $from, $to, $branchIds, $branchId)
+            ->where('status', '!=', OrderStatus::CANCELLED->value)
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as count, COALESCE(SUM(total_amount), 0) as revenue')
+            ->groupBy('day')
+            ->orderBy('day')
+            ->get()
+            ->map(fn ($row) => [
+                'date' => (string) $row->day,
+                'orders' => (int) $row->count,
+                'revenue' => round((float) $row->revenue, 2),
+            ])
+            ->values();
+
         $orderCount = (int) $totals->order_count;
         $netRevenue = round((float) $totals->total_amount, 2);
 
@@ -79,6 +94,7 @@ class ReportService
             'net_revenue' => $netRevenue,
             'average_order_value' => $orderCount > 0 ? round($netRevenue / $orderCount, 2) : 0.0,
             'by_order_type' => $byOrderType,
+            'by_day' => $byDay,
         ];
     }
 

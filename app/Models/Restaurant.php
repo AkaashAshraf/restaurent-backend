@@ -16,11 +16,12 @@ class Restaurant extends Model
     protected $fillable = [
         'name', 'legal_name', 'slug', 'logo', 'description', 'phone', 'email',
         'website', 'address', 'city', 'country', 'currency', 'timezone',
-        'status', 'theme',
+        'status', 'theme', 'app_branding',
     ];
 
     protected $casts = [
         'theme' => 'array',
+        'app_branding' => 'array',
         'status' => RestaurantStatus::class,
     ];
 
@@ -95,6 +96,9 @@ class Restaurant extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    /** app_key is never mass-assigned — only CustomerAppController sets it. */
+    protected $hidden = ['app_key'];
 
     public function isOperational(): bool
     {

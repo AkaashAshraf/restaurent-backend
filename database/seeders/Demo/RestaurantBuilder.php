@@ -73,7 +73,26 @@ class RestaurantBuilder
         $attributes = $data['restaurant'];
         $attributes['logo'] = $this->imageUrl($data['logo']);
 
+        $app = $data['customer_app'] ?? null;
+        if ($app) {
+            // Image fields in the demo data are file names under public/demo/images.
+            foreach (['logo_url', 'icon_url', 'splash_url'] as $field) {
+                if (isset($app['branding'][$field])) {
+                    $app['branding'][$field] = $this->imageUrl($app['branding'][$field]);
+                }
+            }
+            $app['branding']['banner_urls'] = array_values(array_filter(array_map(
+                fn ($file) => $this->imageUrl($file),
+                $app['branding']['banner_urls'] ?? []
+            )));
+            $attributes['app_branding'] = array_filter($app['branding'], fn ($v) => $v !== null && $v !== []);
+        }
+
         $restaurant = Restaurant::updateOrCreate(['slug' => $attributes['slug']], $attributes);
+        if ($app) {
+            // Fixed demo keys so the customer app can be tried straight away.
+            $restaurant->forceFill(['app_key' => $app['key']])->save();
+        }
         $restaurant->settings()->updateOrCreate(['restaurant_id' => $restaurant->id], $data['settings']);
 
         return $restaurant->fresh('settings');
