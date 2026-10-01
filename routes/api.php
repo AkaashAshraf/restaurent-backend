@@ -40,6 +40,7 @@ Route::prefix('v1')->group(function () {
     Route::get('app/config', [ConfigController::class, 'appConfig']);
     Route::get('app/menu', [MenuController::class, 'publicMenu']);
     Route::get('app/tables', [ConfigController::class, 'appTables']);
+    Route::get('app/delivery-quote', [ConfigController::class, 'appDeliveryQuote']);
 
     Route::post('auth/login', [AuthController::class, 'login']);
 

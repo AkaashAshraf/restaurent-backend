@@ -646,6 +646,44 @@ class OrderService
     }
 
     /**
+     * What delivering to a point would cost and whether it is possible at
+     * all — the same zone + fee rules placing a DELIVERY order applies,
+     * exposed so an app can show the real fee (and refuse an address
+     * outside the delivery area) before the customer ever taps "Place order".
+     *
+     * @return array{deliverable: bool, reason: ?string, zone: ?array, fee: ?float, free_delivery_threshold: ?float, zones_configured: bool}
+     */
+    public function deliveryQuote(Restaurant $restaurant, Branch $branch, ?float $latitude, ?float $longitude, float $subtotal): array
+    {
+        $zonesConfigured = $this->geofencing->branchHasZonesConfigured($branch);
+        $zone = null;
+        $deliverable = true;
+        $reason = null;
+
+        if ($zonesConfigured) {
+            if ($latitude === null || $longitude === null) {
+                $deliverable = false;
+                $reason = 'LOCATION_REQUIRED';
+            } else {
+                $zone = $this->geofencing->resolveZone($branch, $latitude, $longitude);
+                if (! $zone) {
+                    $deliverable = false;
+                    $reason = 'OUTSIDE_DELIVERY_AREA';
+                }
+            }
+        }
+
+        return [
+            'deliverable' => $deliverable,
+            'reason' => $reason,
+            'zone' => $zone ? ['id' => $zone->id, 'name' => $zone->name] : null,
+            'fee' => $deliverable ? $this->resolveDeliveryFee($restaurant, $branch, $subtotal, $zone) : null,
+            'free_delivery_threshold' => $this->resolveFreeDeliveryThreshold($restaurant, $branch),
+            'zones_configured' => $zonesConfigured,
+        ];
+    }
+
+    /**
      * Free-delivery-threshold wins outright regardless of zone — a big
      * enough order is free to deliver no matter which zone it lands in.
      * Below that threshold: the zone's own override (if it set one) beats

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Restaurant;
+use App\Models\Branch;
 use App\Services\FeatureService;
+use App\Services\OrderService;
 use App\Services\RestaurantResolver;
 use App\Support\ApiResponse;
 use App\Support\CustomerAppBranding;
@@ -68,6 +70,12 @@ class ConfigController extends Controller
             'tax_enabled' => (bool) ($settings?->tax_enabled ?? false),
             'online_tax_percentage' => $settings ? $settings->taxRateFor('ONLINE') : 0,
         ];
+        // Which branches limit delivery to drawn zones (so the app knows to
+        // ask for a pinned location before offering delivery there).
+        $zoneBranchIds = \App\Models\DeliveryZone::where('is_active', true)->pluck('branch_id')->unique()->all();
+        $config['branches'] = collect($config['branches'])->map(
+            fn ($b) => $b + ['has_delivery_zones' => in_array($b['id'], $zoneBranchIds, true)]
+        )->values()->all();
         $config['restaurant']['operational'] = $restaurant->isOperational();
         $config['restaurant']['description'] = $restaurant->description;
         $config['restaurant']['phone'] = $restaurant->phone;
@@ -97,6 +105,46 @@ class ConfigController extends Controller
             ->get(['id', 'branch_id', 'table_number', 'section', 'capacity']);
 
         return ApiResponse::success($tables);
+    }
+
+    /**
+     * GET /api/v1/app/delivery-quote?branch_id=&latitude=&longitude=&subtotal=
+     * — can this branch deliver to that point, and what would it cost? Public
+     * (the customer sees the fee before signing in); answers with the same
+     * zone and fee rules a DELIVERY order is placed under.
+     */
+    public function appDeliveryQuote(Request $request, OrderService $orders)
+    {
+        $restaurant = $this->restaurants->resolve($request);
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant is configured for this server URL.', 404);
+        }
+
+        $this->tenant->reset()->setRestaurantId($restaurant->id);
+
+        $data = $request->validate([
+            'branch_id' => ['required', 'integer'],
+            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
+            'subtotal' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $branch = Branch::where('status', 'ACTIVE')->find($data['branch_id']);
+        if (! $branch) {
+            return ApiResponse::error('NOT_FOUND', 'That branch is not available.', 404);
+        }
+
+        $restaurant->loadMissing('settings');
+        $branch->loadMissing('settings');
+
+        return ApiResponse::success($orders->deliveryQuote(
+            $restaurant,
+            $branch,
+            isset($data['latitude']) ? (float) $data['latitude'] : null,
+            isset($data['longitude']) ? (float) $data['longitude'] : null,
+            (float) ($data['subtotal'] ?? 0),
+        ));
     }
 
     /** GET /api/v1/config — authenticated variant, resolves restaurant from the current user. */
