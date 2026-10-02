@@ -14,13 +14,14 @@ class Deal extends Model
 
     protected $fillable = [
         'restaurant_id', 'name', 'description', 'image', 'price', 'status',
-        'starts_on', 'ends_on', 'display_order',
+        'starts_on', 'ends_on', 'display_order', 'notified_at', 'notified_count',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'starts_on' => 'date:Y-m-d',
         'ends_on' => 'date:Y-m-d',
+        'notified_at' => 'datetime',
     ];
 
     public function items(): HasMany

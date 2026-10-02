@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\CouponController;
 use App\Http\Controllers\Api\V1\CustomerAddressController;
 use App\Http\Controllers\Api\V1\CustomerAuthController;
 use App\Http\Controllers\Api\V1\DealController;
+use App\Http\Controllers\Api\V1\ProductHighlightsController;
 use App\Http\Controllers\Api\V1\CustomerOrderController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryZoneController;
@@ -43,6 +44,7 @@ Route::prefix('v1')->group(function () {
     Route::get('app/config', [ConfigController::class, 'appConfig']);
     Route::get('app/menu', [MenuController::class, 'publicMenu']);
     Route::get('app/deals', [DealController::class, 'publicIndex']);
+    Route::get('app/best-sellers', [ProductHighlightsController::class, 'bestSellers']);
     Route::get('app/tables', [ConfigController::class, 'appTables']);
     Route::get('app/delivery-quote', [ConfigController::class, 'appDeliveryQuote']);
     Route::get('app/delivery-branches', [ConfigController::class, 'appDeliveryBranches']);
@@ -74,6 +76,7 @@ Route::prefix('v1')->group(function () {
             Route::patch('addresses/{address}', [CustomerAddressController::class, 'update']);
             Route::delete('addresses/{address}', [CustomerAddressController::class, 'destroy']);
 
+            Route::get('favorites', [ProductHighlightsController::class, 'favorites']);
             Route::get('orders', [CustomerOrderController::class, 'index']);
             Route::get('orders/{order}', [CustomerOrderController::class, 'show']);
             // Browsing/loyalty could exist without accepting online
@@ -260,6 +263,7 @@ Route::prefix('v1')->group(function () {
                     Route::patch('categories/{category}', [CategoryController::class, 'update']);
                     Route::patch('products/{product}', [ProductController::class, 'update']);
                     Route::patch('deals/{deal}', [DealController::class, 'update']);
+                    Route::post('deals/{deal}/notify', [DealController::class, 'notify']);
                     Route::patch('products/{product}/modifier-groups', [ProductController::class, 'updateModifierGroups']);
                     Route::patch('modifier-groups/{modifierGroup}', [ModifierGroupController::class, 'update']);
                     Route::patch('modifiers/{modifier}', [ModifierController::class, 'update']);

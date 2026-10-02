@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Deal;
 use App\Models\Product;
 use App\Services\DealService;
+use App\Services\NotificationService;
 use App\Services\RestaurantResolver;
 use App\Support\ApiResponse;
 use App\Support\CustomerAppBranding;
@@ -27,6 +28,7 @@ class DealController extends Controller
         private DealService $deals,
         private TenantContext $tenant,
         private RestaurantResolver $restaurants,
+        private NotificationService $notifications,
     ) {
     }
 
@@ -56,7 +58,7 @@ class DealController extends Controller
         $data = $this->validated($request);
 
         $deal = DB::transaction(function () use ($restaurant, $data) {
-            $deal = Deal::create(collect($data)->except('items')->all() + ['restaurant_id' => $restaurant->id]);
+            $deal = Deal::create(collect($data)->except(['items', 'notify_customers'])->all() + ['restaurant_id' => $restaurant->id]);
             $this->syncItems($deal, $data['items']);
 
             return $deal;
@@ -64,7 +66,15 @@ class DealController extends Controller
 
         $this->audit($request, 'deal.created', $deal, ['new' => $data]);
 
-        return ApiResponse::success($this->present($deal->load('items.product'), $this->deals->today($restaurant)), 201);
+        $notified = null;
+        if ($request->boolean('notify_customers') && $this->canAnnounce($deal, $restaurant)) {
+            $notified = $this->announce($request, $deal->load('items.product'), $restaurant);
+        }
+
+        return ApiResponse::success(
+            $this->present($deal->fresh()->load('items.product'), $this->deals->today($restaurant)) + ['notified_customers' => $notified],
+            201
+        );
     }
 
     public function update(Request $request, int $deal)
@@ -73,7 +83,7 @@ class DealController extends Controller
         $data = $this->validated($request, partial: true);
 
         DB::transaction(function () use ($deal, $data) {
-            $deal->update(collect($data)->except('items')->all());
+            $deal->update(collect($data)->except(['items', 'notify_customers'])->all());
             if (isset($data['items'])) {
                 $this->syncItems($deal, $data['items']);
             }
@@ -91,6 +101,27 @@ class DealController extends Controller
         $this->audit($request, 'deal.deleted', $deal, []);
 
         return ApiResponse::success(['deleted' => true]);
+    }
+
+    /** POST /deals/{deal}/notify — (re)announce a deal to the restaurant's customers. */
+    public function notify(Request $request, int $deal)
+    {
+        $deal = Deal::with('items.product')->findOrFail($deal);
+        $restaurant = $request->user()->restaurant;
+
+        if (! $this->canAnnounce($deal, $restaurant)) {
+            throw ValidationException::withMessages(['deal' => 'Only a deal that is live or scheduled can be announced.']);
+        }
+        // A guard against pressing the button twice, not a marketing policy.
+        if ($deal->notified_at && $deal->notified_at->gt(now()->subHour())) {
+            throw ValidationException::withMessages([
+                'deal' => 'This deal was announced '.$deal->notified_at->diffForHumans().'. Please wait an hour before sending it again.',
+            ]);
+        }
+
+        $sent = $this->announce($request, $deal, $restaurant);
+
+        return ApiResponse::success($this->present($deal->fresh()->load('items.product'), $this->deals->today($restaurant)) + ['notified_customers' => $sent]);
     }
 
     /** POST /deals/image — a photo for a deal; returns the URL to save on it. */
@@ -143,6 +174,34 @@ class DealController extends Controller
 
     // -------------------------------------------------------------- helpers
 
+    /** Live or scheduled — i.e. not paused and not over. */
+    private function canAnnounce(Deal $deal, $restaurant): bool
+    {
+        return in_array($this->state($deal, $this->deals->today($restaurant)), ['LIVE', 'SCHEDULED'], true);
+    }
+
+    private function announce(Request $request, Deal $deal, $restaurant): int
+    {
+        $original = $deal->items->sum(fn ($i) => (float) ($i->product?->base_price ?? 0) * $i->quantity);
+        $price = (float) $deal->price;
+        $body = "{$deal->name} for {$restaurant->currency} ".number_format($price, 2);
+        if ($original > $price) {
+            $body .= ' (save '.number_format($original - $price, 2).')';
+        }
+        $body .= '.';
+        if ($deal->starts_on && $this->deals->today($restaurant) < $deal->starts_on->toDateString()) {
+            $body .= ' Starts '.$deal->starts_on->format('j M').'.';
+        } elseif ($deal->ends_on) {
+            $body .= ' Ends '.$deal->ends_on->format('j M').'.';
+        }
+
+        $sent = $this->notifications->dealAnnounced($deal, $body);
+        $deal->forceFill(['notified_at' => now(), 'notified_count' => $sent])->save();
+        $this->audit($request, 'deal.announced', $deal, ['customers' => $sent]);
+
+        return $sent;
+    }
+
     private function validated(Request $request, bool $partial = false): array
     {
         $req = $partial ? 'sometimes' : 'required';
@@ -155,6 +214,7 @@ class DealController extends Controller
             'starts_on' => ['nullable', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
             'display_order' => ['nullable', 'integer', 'min:0'],
+            'notify_customers' => ['nullable', 'boolean'],
             'items' => [$req, 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'distinct'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:50'],
@@ -209,6 +269,8 @@ class DealController extends Controller
             'starts_on' => $deal->starts_on?->toDateString(),
             'ends_on' => $deal->ends_on?->toDateString(),
             'display_order' => (int) $deal->display_order,
+            'notified_at' => $deal->notified_at?->toIso8601String(),
+            'notified_count' => (int) $deal->notified_count,
             'is_running' => $deal->isRunningOn($today),
             'state' => $this->state($deal, $today),
             'items' => $deal->items->map(fn ($i) => [

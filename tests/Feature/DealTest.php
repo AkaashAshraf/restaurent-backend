@@ -241,4 +241,112 @@ class DealTest extends TestCase
             'file' => \Illuminate\Http\UploadedFile::fake()->create('x.pdf', 10, 'application/pdf'),
         ], ['Accept' => 'application/json'])->assertStatus(422);
     }
+
+    public function test_a_deal_with_no_dates_runs_forever(): void
+    {
+        [$restaurant, $branch, $token, $burger, $fries] = $this->setup3();
+
+        $deal = $this->createDeal($token, $burger, $fries, ['starts_on' => null, 'ends_on' => null]);
+        $this->assertSame('LIVE', $deal['state']);
+        $this->assertNull($deal['starts_on']);
+        $this->assertNull($deal['ends_on']);
+
+        // Clearing the dates later turns a limited deal into an always-on one.
+        $limited = $this->createDeal($token, $burger, $fries, ['name' => 'Limited', 'ends_on' => now()->addDays(2)->toDateString()]);
+        $this->withUserToken($token)->patchJson("/api/v1/deals/{$limited['id']}", ['starts_on' => null, 'ends_on' => null])
+            ->assertOk()->assertJsonPath('data.ends_on', null)->assertJsonPath('data.state', 'LIVE');
+
+        $this->travel(5)->years();
+        $this->getJson("/api/v1/app/deals?restaurant={$restaurant->slug}&branch={$branch->id}")->assertOk()->assertJsonCount(2, 'data.deals');
+    }
+
+    public function test_creating_a_deal_can_notify_customers_who_get_it_in_their_inbox_and_by_push(): void
+    {
+        [$restaurant, , $token, $burger, $fries] = $this->setup3();
+        $a = $this->customerToken($restaurant, '5553101');
+        $b = $this->customerToken($restaurant, '5553102');
+        \App\Models\Customer::where('phone', '5553102')->update(['status' => 'INACTIVE']);
+        $this->withUserToken($a)->postJson('/api/v1/customer/device-tokens', ['token' => 'phone-a', 'platform' => 'ANDROID'])->assertStatus(201);
+
+        $this->mock(\App\Contracts\PushGateway::class, function ($mock) {
+            $mock->shouldReceive('send')->once()->withArgs(fn ($tok, $title) => $tok === 'phone-a' && str_contains($title, 'Burger Combo'));
+        });
+
+        $deal = $this->createDeal($token, $burger, $fries, ['notify_customers' => true]);
+        $this->assertSame(1, $deal['notified_customers']);
+        $this->assertSame(1, $deal['notified_count']);
+        $this->assertNotNull($deal['notified_at']);
+
+        $inbox = $this->withUserToken($a)->getJson('/api/v1/customer/notifications')->assertOk()->json('data.data');
+        $this->assertSame('deal.announced', $inbox[0]['data']['type']);
+        $this->assertStringContainsString('Burger Combo', $inbox[0]['data']['title']);
+        $this->assertStringContainsString('save 8.00', $inbox[0]['data']['body']);
+        $this->assertSame($deal['id'], $inbox[0]['data']['deal_id']);
+
+        // Not asked for: nobody is told.
+        $quiet = $this->createDeal($token, $burger, $fries, ['name' => 'Quiet one']);
+        $this->assertNull($quiet['notified_customers']);
+        $this->withUserToken($a)->getJson('/api/v1/customer/notifications/unread-count')->assertJsonPath('data.unread_count', 1);
+        $this->assertNotNull($b);
+    }
+
+    public function test_a_customer_can_switch_deal_push_off(): void
+    {
+        [$restaurant, , $token, $burger, $fries] = $this->setup3();
+        $a = $this->customerToken($restaurant, '5553111');
+        $this->withUserToken($a)->postJson('/api/v1/customer/device-tokens', ['token' => 'phone-a', 'platform' => 'ANDROID'])->assertStatus(201);
+
+        $prefs = $this->withUserToken($a)->getJson('/api/v1/customer/notification-preferences')->assertOk()->json('data');
+        $this->assertTrue($prefs['deal.announced']['push']);
+        $this->assertFalse($prefs['deal.announced']['sms']);
+
+        $this->withUserToken($a)->putJson('/api/v1/customer/notification-preferences', [
+            'preferences' => [['event_key' => 'deal.announced', 'channel' => 'push', 'enabled' => false]],
+        ])->assertOk();
+        $this->assertFalse($this->withUserToken($a)->getJson('/api/v1/customer/notification-preferences')->json('data')['deal.announced']['push']);
+
+        $this->mock(\App\Contracts\PushGateway::class, fn ($mock) => $mock->shouldReceive('send')->never());
+        $this->createDeal($token, $burger, $fries, ['notify_customers' => true]);
+
+        // Still in the inbox.
+        $this->withUserToken($a)->getJson('/api/v1/customer/notifications/unread-count')->assertJsonPath('data.unread_count', 1);
+    }
+
+    public function test_a_deal_can_be_announced_later_but_not_twice_in_a_row_and_not_when_over(): void
+    {
+        [$restaurant, , $token, $burger, $fries] = $this->setup3();
+        $this->customerToken($restaurant, '5553121');
+
+        $deal = $this->createDeal($token, $burger, $fries);
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$deal['id']}/notify")
+            ->assertOk()->assertJsonPath('data.notified_customers', 1);
+
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$deal['id']}/notify")->assertStatus(422);
+
+        $this->travel(61)->minutes();
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$deal['id']}/notify")->assertOk();
+        $this->travelBack();
+
+        $ended = $this->createDeal($token, $burger, $fries, ['ends_on' => now()->subDay()->toDateString()]);
+        $paused = $this->createDeal($token, $burger, $fries, ['status' => 'INACTIVE']);
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$ended['id']}/notify")->assertStatus(422);
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$paused['id']}/notify")->assertStatus(422);
+    }
+
+    public function test_notifying_needs_menu_update_permission_and_stays_inside_the_restaurant(): void
+    {
+        [$restaurant, $branch, $token, $burger, $fries] = $this->setup3();
+        $deal = $this->createDeal($token, $burger, $fries);
+
+        [$otherRestaurant, , $otherOwner] = $this->makeRestaurantWithOwner('Other Co', planSlug: 'premium');
+        $otherCustomer = $this->customerToken($otherRestaurant, '5553131');
+        $this->withUserToken($this->actingAsUser($otherOwner))->postJson("/api/v1/deals/{$deal['id']}/notify")->assertStatus(404);
+
+        $waiter = $this->makeBranchScopedUser($restaurant, $branch, 'waiter');
+        $this->withUserToken($this->actingAsUser($waiter))->postJson("/api/v1/deals/{$deal['id']}/notify")->assertStatus(403);
+
+        // And another restaurant's customers never hear about our deals.
+        $this->withUserToken($token)->postJson("/api/v1/deals/{$deal['id']}/notify")->assertOk()->assertJsonPath('data.notified_customers', 0);
+        $this->withUserToken($otherCustomer)->getJson('/api/v1/customer/notifications/unread-count')->assertJsonPath('data.unread_count', 0);
+    }
 }

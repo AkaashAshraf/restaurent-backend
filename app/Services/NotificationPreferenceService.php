@@ -34,7 +34,14 @@ class NotificationPreferenceService
 {
     public const STAFF_EVENTS = ['order.placed', 'order.status_changed', 'order.rider_assigned', 'payment.received'];
 
-    public const CUSTOMER_EVENTS = ['order.placed', 'order.status_changed'];
+    public const CUSTOMER_EVENTS = ['order.placed', 'order.status_changed', 'deal.announced'];
+
+    /**
+     * Channels that are ON until the customer turns them off. Everything else
+     * stays opt-in. Deal announcements are something the customer follows the
+     * restaurant for, and they can switch push off in the app's settings.
+     */
+    public const DEFAULT_ON = ['deal.announced' => ['push']];
 
     public const CHANNELS = ['mail', 'sms', 'push'];
 
@@ -51,10 +58,17 @@ class NotificationPreferenceService
 
     public function isEnabled(Authenticatable $notifiable, string $eventKey, string $channel): bool
     {
-        return (bool) NotificationPreference::where(self::ownerColumn($notifiable), $notifiable->getAuthIdentifier())
+        $stored = NotificationPreference::where(self::ownerColumn($notifiable), $notifiable->getAuthIdentifier())
             ->where('event_key', $eventKey)
             ->where('channel', $channel)
             ->value('enabled');
+
+        return $stored === null ? $this->defaultOn($notifiable, $eventKey, $channel) : (bool) $stored;
+    }
+
+    private function defaultOn(Authenticatable $notifiable, string $eventKey, string $channel): bool
+    {
+        return $notifiable instanceof Customer && in_array($channel, self::DEFAULT_ON[$eventKey] ?? [], true);
     }
 
     /** @return array<string, array<string, bool>> event_key => [channel => enabled] */
@@ -67,7 +81,8 @@ class NotificationPreferenceService
         $matrix = [];
         foreach (self::eventsFor($notifiable) as $event) {
             foreach (self::CHANNELS as $channel) {
-                $matrix[$event][$channel] = (bool) ($rows->get("{$event}:{$channel}")?->enabled ?? false);
+                $row = $rows->get("{$event}:{$channel}");
+                $matrix[$event][$channel] = $row ? (bool) $row->enabled : $this->defaultOn($notifiable, $event, $channel);
             }
         }
 

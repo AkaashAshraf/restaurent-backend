@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Enums\UserStatus;
+use App\Models\Customer;
+use App\Models\Deal;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
+use App\Notifications\DealAnnouncementNotification;
 use App\Notifications\OrderPlacedNotification;
 use App\Notifications\OrderRiderAssignedNotification;
 use App\Notifications\OrderStatusChangedNotification;
@@ -33,6 +36,26 @@ class NotificationService
 
     public function __construct(private PermissionService $permissions)
     {
+    }
+
+    /**
+     * Tells every active customer of the deal's restaurant about it. Returns how
+     * many were notified. (Sent in the same request, like every other
+     * notification here; customers are handled in chunks.)
+     */
+    public function dealAnnounced(Deal $deal, string $body): int
+    {
+        $notification = new DealAnnouncementNotification($deal, $body);
+        $count = 0;
+
+        Customer::where('restaurant_id', $deal->restaurant_id)
+            ->where('status', 'ACTIVE')
+            ->chunkById(200, function ($customers) use ($notification, &$count) {
+                Notification::send($customers, $notification);
+                $count += $customers->count();
+            });
+
+        return $count;
     }
 
     public function orderPlaced(Order $order): void
