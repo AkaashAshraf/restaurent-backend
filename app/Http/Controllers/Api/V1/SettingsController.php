@@ -21,6 +21,8 @@ class SettingsController extends Controller
                 'website', 'address', 'city', 'country', 'currency', 'timezone', 'theme',
             ]),
             'settings' => $restaurant->settings,
+            // The admin panel hides the zone editor while zones are switched off.
+            'delivery_zones_enabled' => (bool) config('delivery.zones_enabled', false),
         ]);
     }
 

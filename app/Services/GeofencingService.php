@@ -14,8 +14,19 @@ use App\Models\DeliveryZone;
  */
 class GeofencingService
 {
+    /** Zones can be switched off for the whole platform (config/delivery.php). */
+    public function enabled(): bool
+    {
+        return (bool) config('delivery.zones_enabled', false);
+    }
+
     public function branchHasZonesConfigured(Branch $branch): bool
     {
+        // Switched off: every branch behaves as "no zones set up" — it delivers anywhere.
+        if (! $this->enabled()) {
+            return false;
+        }
+
         return DeliveryZone::where('branch_id', $branch->id)->where('is_active', true)->exists();
     }
 

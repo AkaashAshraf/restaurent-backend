@@ -75,7 +75,9 @@ class ConfigController extends Controller
         ];
         // Which branches limit delivery to drawn zones (so the app knows to
         // ask for a pinned location before offering delivery there).
-        $zoneBranchIds = \App\Models\DeliveryZone::where('is_active', true)->pluck('branch_id')->unique()->all();
+        $zoneBranchIds = config('delivery.zones_enabled', false)
+            ? \App\Models\DeliveryZone::where('is_active', true)->pluck('branch_id')->unique()->all()
+            : [];
         $config['branches'] = collect($config['branches'])->map(
             fn ($b) => $b + ['has_delivery_zones' => in_array($b['id'], $zoneBranchIds, true)]
         )->values()->all();
