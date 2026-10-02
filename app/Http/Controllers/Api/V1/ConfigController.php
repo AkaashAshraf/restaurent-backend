@@ -72,6 +72,8 @@ class ConfigController extends Controller
             // Customers pay online, which is charged the card rate.
             'tax_enabled' => (bool) ($settings?->tax_enabled ?? false),
             'online_tax_percentage' => $settings ? $settings->taxRateFor('ONLINE') : 0,
+            // Paying cash (on delivery / at the restaurant) is taxed at the cash rate.
+            'cash_tax_percentage' => $settings ? $settings->taxRateFor('CASH') : 0,
         ];
         // Which branches limit delivery to drawn zones (so the app knows to
         // ask for a pinned location before offering delivery there).
