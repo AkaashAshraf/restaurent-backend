@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\SuperAdmin;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Feature;
+use App\Models\Branch;
 use App\Models\Restaurant;
 use App\Models\RestaurantFeature;
 use App\Models\Role;
@@ -88,13 +89,19 @@ class RestaurantController extends Controller
 
     public function show(Restaurant $restaurant)
     {
-        return ApiResponse::success($restaurant->load(
+        $restaurant->load(
             'settings',
-            'branches',
             'activeSubscription.plan',
             'activeSubscription.featureOverrides.feature',
             'featureOverrides.feature',
-        ));
+        );
+
+        // Branch is tenant-scoped, and a super admin has no tenant — through the relation it
+        // would always come back empty. Ask for this restaurant's branches explicitly.
+        $restaurant->setRelation('branches', Branch::withoutGlobalScopes()
+            ->where('restaurant_id', $restaurant->id)->orderBy('name')->get());
+
+        return ApiResponse::success($restaurant);
     }
 
     public function update(Request $request, Restaurant $restaurant)

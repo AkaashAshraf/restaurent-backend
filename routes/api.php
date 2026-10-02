@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\SuperAdmin\CustomerAppController;
 use App\Http\Controllers\Api\V1\SuperAdmin\DashboardController;
 use App\Http\Controllers\Api\V1\SuperAdmin\FeatureController;
 use App\Http\Controllers\Api\V1\SuperAdmin\RestaurantController;
+use App\Http\Controllers\Api\V1\SuperAdmin\RestaurantInsightsController;
 use App\Http\Controllers\Api\V1\SuperAdmin\SubscriptionController;
 use App\Http\Controllers\Api\V1\SuperAdmin\SubscriptionPlanController;
 use App\Http\Controllers\Api\V1\UserController;
@@ -151,6 +152,15 @@ Route::prefix('v1')->group(function () {
             Route::patch('restaurants/{restaurant}', [RestaurantController::class, 'update']);
             Route::patch('restaurants/{restaurant}/status', [RestaurantController::class, 'updateStatus']);
             Route::patch('restaurants/{restaurant}/features/{feature}', [RestaurantController::class, 'toggleFeatureOverride']);
+
+            // Read-only look inside one restaurant: staff, customers, orders, sales, products.
+            Route::get('restaurants/{restaurant}/insights', [RestaurantInsightsController::class, 'overview']);
+            Route::get('restaurants/{restaurant}/staff', [RestaurantInsightsController::class, 'staff']);
+            Route::get('restaurants/{restaurant}/customers', [RestaurantInsightsController::class, 'customers']);
+            Route::get('restaurants/{restaurant}/orders', [RestaurantInsightsController::class, 'orders']);
+            Route::get('restaurants/{restaurant}/sales', [RestaurantInsightsController::class, 'sales']);
+            Route::get('restaurants/{restaurant}/products', [RestaurantInsightsController::class, 'products']);
+            Route::get('restaurants/{restaurant}/products/{product}', [RestaurantInsightsController::class, 'product'])->whereNumber('product');
 
             // The restaurant's own white-label customer app: its key and branding.
             Route::get('restaurants/{restaurant}/customer-app', [CustomerAppController::class, 'show']);
