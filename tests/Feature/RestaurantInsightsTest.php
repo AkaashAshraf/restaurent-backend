@@ -293,4 +293,39 @@ class RestaurantInsightsTest extends TestCase
         $this->assertCount(1, $data['branches']);
         $this->assertSame($branch->id, $data['branches'][0]['id']);
     }
+
+    public function test_the_platform_dashboard_rolls_up_sales_activity_and_things_to_watch(): void
+    {
+        [$busy, $branch] = $this->makeRestaurantWithOwner('Busy Dash Co');
+        [$quiet, $quietBranch] = $this->makeRestaurantWithOwner('Quiet Dash Co');
+        [$lapsed] = $this->makeRestaurantWithOwner('No Plan Co', null);
+        $quiet->subscriptions()->update(['expiry_date' => now()->addDays(5)->toDateString()]);
+
+        $this->makeProduct($busy, 'Dish');
+        $c = $this->makeCustomer($busy, 'Dina', '+921111');
+        $this->makeOrder($busy, $branch, ['customer_id' => $c, 'total' => 100]);
+        $this->makeOrder($busy, $branch, ['customer_id' => $c, 'total' => 50]);
+        $this->makeOrder($busy, $branch, ['total' => 999, 'status' => 'CANCELLED']);
+        $this->makeOrder($quiet, $quietBranch, ['total' => 10]);
+
+        $d = $this->withUserToken($this->asSuperAdmin())->getJson('/api/v1/super-admin/dashboard')->assertOk()->json('data');
+
+        $this->assertSame(3, $d['total_restaurants']);                       // the old counts are still there
+        $this->assertSame(4, $d['platform']['orders']);
+        $this->assertSame(1, $d['platform']['customers']);
+        $this->assertSame(1, $d['platform']['products']);
+        $this->assertEquals(160, $d['sales'][0]['last_30_days']);           // cancelled left out
+        $this->assertEquals(160, $d['sales'][0]['today']);
+        $this->assertSame('USD', $d['trend']['currency']);
+        $this->assertCount(30, $d['trend']['points']);
+        $this->assertEquals(160, end($d['trend']['points'])['revenue']);
+
+        $this->assertSame('Busy Dash Co', $d['top_restaurants'][0]['name']);
+        $this->assertSame(2, $d['top_restaurants'][0]['orders_30_days']);
+        $this->assertSame('Quiet Dash Co', $d['expiring_soon'][0]['name']);
+        $this->assertSame(5, $d['expiring_soon'][0]['days_left']);
+        $this->assertSame('No Plan Co', $d['needs_attention'][0]['name']);
+        $this->assertSame(3, $d['restaurants_by_status']['ACTIVE']);
+        $this->assertSame(2, $d['subscriptions_by_plan'][0]['restaurants']);
+    }
 }
