@@ -23,11 +23,12 @@ class MenuService
     {
         $categories = $restaurant->categories()
             ->with([
-                'products' => fn ($q) => $q->orderBy('display_order'),
+                'products' => fn ($q) => $q->orderBy('display_order')->orderBy('id'),
                 'products.branchOverrides' => fn ($q) => $branch ? $q->where('branch_id', $branch->id) : $q,
                 'products.modifierGroups.modifiers' => fn ($q) => $q->where('status', MenuItemStatus::ACTIVE->value)->orderBy('display_order'),
             ])
             ->orderBy('display_order')
+            ->orderBy('id')
             ->get();
 
         if ($onlyAvailable) {
