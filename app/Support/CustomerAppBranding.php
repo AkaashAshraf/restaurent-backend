@@ -121,16 +121,57 @@ class CustomerAppBranding
         ];
     }
 
-    /** Relative paths ("/storage/..." or "logos/x.png") become absolute URLs. */
+    /**
+     * Relative paths ("/storage/..." or "logos/x.png") become absolute URLs.
+     *
+     * Uploaded images live under /storage on the same server as the API, so
+     * they are addressed by the host the request came in on, not by APP_URL.
+     * (APP_URL is often left at http://localhost, which made every uploaded
+     * image a broken link.) An already-absolute /storage/ URL, e.g. saved
+     * earlier with the wrong host, is re-pointed the same way.
+     */
     public static function url(?string $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
         if (preg_match('#^https?://#i', $value)) {
+            $parts = parse_url($value);
+            if (isset($parts['path']) && str_starts_with($parts['path'], '/storage/')) {
+                return self::baseUrl() . $parts['path'] . (isset($parts['query']) ? '?' . $parts['query'] : '');
+            }
+
             return $value;
         }
 
-        return rtrim((string) config('app.url'), '/') . '/' . ltrim($value, '/');
+        return self::baseUrl() . '/' . ltrim($value, '/');
+    }
+
+    /** The scheme + host this request was made to; APP_URL only outside a web request. */
+    private static function baseUrl(): string
+    {
+        if (! app()->runningInConsole() || app()->runningUnitTests()) {
+            $request = request();
+            if ($request && $request->getHost() !== '') {
+                return rtrim($request->getSchemeAndHttpHost(), '/');
+            }
+        }
+
+        return rtrim((string) config('app.url'), '/');
+    }
+
+    /** The saved branding with its image URLs made absolute, for the admin form. */
+    public static function withAbsoluteUrls(array $branding): array
+    {
+        foreach (['logo_url', 'icon_url', 'splash_url'] as $key) {
+            if (! empty($branding[$key])) {
+                $branding[$key] = self::url($branding[$key]);
+            }
+        }
+        if (! empty($branding['banner_urls']) && is_array($branding['banner_urls'])) {
+            $branding['banner_urls'] = array_values(array_map([self::class, 'url'], $branding['banner_urls']));
+        }
+
+        return $branding;
     }
 }

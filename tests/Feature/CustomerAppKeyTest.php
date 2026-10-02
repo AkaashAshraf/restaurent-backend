@@ -120,6 +120,39 @@ class CustomerAppKeyTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_uploaded_image_urls_use_the_host_of_the_request_not_app_url(): void
+    {
+        Storage::fake('public');
+        config(['app.url' => 'http://localhost']);
+        [$restaurant] = $this->makeRestaurantWithOwner();
+
+        $api = 'http://api.example.test';
+        $res = $this->asSuperAdmin()->postJson($api.$this->base($restaurant->id).'/assets', [
+            'type' => 'logo',
+            'file' => UploadedFile::fake()->image('logo.png', 600, 600),
+        ])->assertCreated();
+        $url = $res->json('data.url');
+        $this->assertStringStartsWith($api.'/storage/', $url);
+        $this->assertStringContainsString('/storage/restaurants/'.$restaurant->id.'/app/logo-', $url);
+
+        // One saved earlier with the wrong host is repaired on the way out.
+        $restaurant->forceFill(['app_branding' => ['icon_url' => 'http://localhost/storage/restaurants/1/app/icon-x.png', 'banner_urls' => ['/storage/restaurants/1/app/b.jpg']]])->save();
+        $branding = $this->asSuperAdmin()->getJson($api.$this->base($restaurant->id))->assertOk()->json('data.branding');
+        $host = 'api.example.test';
+        $this->assertSame($host, parse_url($branding['icon_url'], PHP_URL_HOST));
+        $this->assertSame($host, parse_url($branding['banner_urls'][0], PHP_URL_HOST));
+    }
+
+    public function test_storage_route_serves_an_upload_when_the_symlink_is_missing(): void
+    {
+        Storage::fake('public');
+        Storage::disk('public')->put('restaurants/1/app/logo-a.png', 'png-bytes');
+
+        $this->get('/storage/restaurants/1/app/logo-a.png')->assertOk();
+        $this->get('/storage/restaurants/1/app/missing.png')->assertNotFound();
+        $this->get('/storage/..%2F..%2F.env')->assertNotFound();
+    }
+
     public function test_customer_registers_and_sees_tables_through_the_key(): void
     {
         [$restaurant, $branch] = $this->makeRestaurantWithOwner();

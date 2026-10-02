@@ -89,7 +89,7 @@ class CustomerAppController extends Controller
             $data['type'] . '-' . Str::lower(Str::random(10)) . '.' . $file->extension(),
             'public'
         );
-        $url = CustomerAppBranding::url(Storage::disk('public')->url($path));
+        $url = CustomerAppBranding::url('/storage/' . $path);
 
         $branding = $restaurant->app_branding ?: [];
         if ($data['type'] === 'banner') {
@@ -110,7 +110,7 @@ class CustomerAppController extends Controller
         return [
             'restaurant' => ['id' => $restaurant->id, 'name' => $restaurant->name, 'slug' => $restaurant->slug, 'status' => $restaurant->status],
             'app_key' => $restaurant->app_key,
-            'branding' => $restaurant->app_branding ?: (object) [],
+            'branding' => $restaurant->app_branding ? CustomerAppBranding::withAbsoluteUrls($restaurant->app_branding) : (object) [],
             'resolved' => CustomerAppBranding::resolve($restaurant),
             'options' => [
                 'fonts' => CustomerAppBranding::FONTS,

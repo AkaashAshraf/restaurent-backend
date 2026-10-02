@@ -33,7 +33,9 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Off: Laravel's own signed-URL route for this private disk would otherwise
+            // claim /storage/{path}, where the public uploads (logos, banners) live.
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
