@@ -30,7 +30,8 @@ class CustomerOrderController extends Controller
     public function index(Request $request)
     {
         $orders = Order::where('customer_id', $request->user()->id)
-            ->with('table', 'deliveryZone')
+            // Items carry the dish photo so the app can show a few on each order.
+            ->with('table', 'deliveryZone', 'review', 'items.product:id,name,image')
             ->latest()
             ->get();
 
@@ -41,7 +42,7 @@ class CustomerOrderController extends Controller
     {
         $order = Order::where('customer_id', $request->user()->id)->findOrFail($order);
 
-        return ApiResponse::success($order->load('items.modifiers', 'table', 'deliveryZone', 'coupon', 'payments'));
+        return ApiResponse::success($order->load('items.modifiers', 'items.product:id,name,image', 'table', 'deliveryZone', 'coupon', 'payments', 'review', 'assignedRider:id,name'));
     }
 
     /**

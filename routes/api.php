@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\CustomerAddressController;
 use App\Http\Controllers\Api\V1\CustomerAuthController;
 use App\Http\Controllers\Api\V1\DealController;
 use App\Http\Controllers\Api\V1\ProductHighlightsController;
+use App\Http\Controllers\Api\V1\ReviewController;
 use App\Http\Controllers\Api\V1\CustomerOrderController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryZoneController;
@@ -79,6 +80,7 @@ Route::prefix('v1')->group(function () {
             Route::get('favorites', [ProductHighlightsController::class, 'favorites']);
             Route::get('orders', [CustomerOrderController::class, 'index']);
             Route::get('orders/{order}', [CustomerOrderController::class, 'show']);
+            Route::post('orders/{order}/review', [ReviewController::class, 'store']);
             // Browsing/loyalty could exist without accepting online
             // orders, so placing one needs its own, narrower feature gate
             // on top of the broader "customer app is enabled" one above.
@@ -300,6 +302,7 @@ Route::prefix('v1')->group(function () {
                 // submitted order_type — a static route middleware can't
                 // know that ahead of time.
                 Route::middleware('permission:orders.view')->group(function () {
+                    Route::get('reviews', [ReviewController::class, 'index']);
                     Route::get('orders', [OrderController::class, 'index']);
                     Route::get('orders/{order}', [OrderController::class, 'show']);
                 });

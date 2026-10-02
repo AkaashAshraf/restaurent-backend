@@ -65,6 +65,11 @@ class Order extends Model
         return $this->belongsTo(User::class, 'assigned_rider_id');
     }
 
+    public function review(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(OrderReview::class);
+    }
+
     public function deliveryZone(): BelongsTo
     {
         return $this->belongsTo(DeliveryZone::class);
