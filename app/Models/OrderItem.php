@@ -13,7 +13,7 @@ class OrderItem extends Model
     use HasFactory, BelongsToTenant;
 
     protected $fillable = [
-        'restaurant_id', 'order_id', 'kitchen_ticket_id', 'product_id', 'product_name', 'quantity',
+        'restaurant_id', 'order_id', 'kitchen_ticket_id', 'product_id', 'deal_id', 'deal_name', 'deal_ref', 'product_name', 'quantity',
         'returned_quantity', 'unit_price', 'modifiers_total', 'line_total', 'notes',
     ];
 

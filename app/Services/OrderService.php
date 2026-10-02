@@ -86,11 +86,14 @@ class OrderService
             $customer = Customer::ofRestaurant($restaurant->id)->findOrFail($data['customer_id']);
         }
 
-        if (empty($data['items'])) {
+        if (empty($data['items']) && empty($data['deals'])) {
             throw new OrderValidationException('An order must have at least one item.');
         }
 
-        $lineItems = array_map(fn ($item) => $this->buildLineItem($branch, $item), $data['items']);
+        $lineItems = array_map(fn ($item) => $this->buildLineItem($branch, $item), $data['items'] ?? []);
+        if (! empty($data['deals'])) {
+            $lineItems = array_merge($lineItems, app(DealService::class)->expand($restaurant, $branch, $data['deals']));
+        }
 
         $subtotal = round(array_sum(array_column($lineItems, 'line_total')), 2);
         $this->assertMinimumOrderAmount($restaurant, $branch, $subtotal);
@@ -159,6 +162,9 @@ class OrderService
                     'restaurant_id' => $restaurant->id,
                     'kitchen_ticket_id' => $ticket->id,
                     'product_id' => $line['product']->id,
+                    'deal_id' => $line['deal_id'] ?? null,
+                    'deal_name' => $line['deal_name'] ?? null,
+                    'deal_ref' => $line['deal_ref'] ?? null,
                     'product_name' => $line['product']->name,
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],

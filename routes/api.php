@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\ConfigController;
 use App\Http\Controllers\Api\V1\CouponController;
 use App\Http\Controllers\Api\V1\CustomerAddressController;
 use App\Http\Controllers\Api\V1\CustomerAuthController;
+use App\Http\Controllers\Api\V1\DealController;
 use App\Http\Controllers\Api\V1\CustomerOrderController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryZoneController;
@@ -41,6 +42,7 @@ Route::prefix('v1')->group(function () {
     // Public: generic apps configure a Base URL, then hit this before login.
     Route::get('app/config', [ConfigController::class, 'appConfig']);
     Route::get('app/menu', [MenuController::class, 'publicMenu']);
+    Route::get('app/deals', [DealController::class, 'publicIndex']);
     Route::get('app/tables', [ConfigController::class, 'appTables']);
     Route::get('app/delivery-quote', [ConfigController::class, 'appDeliveryQuote']);
     Route::get('app/delivery-branches', [ConfigController::class, 'appDeliveryBranches']);
@@ -240,6 +242,8 @@ Route::prefix('v1')->group(function () {
                     Route::get('categories', [CategoryController::class, 'index']);
                     Route::get('categories/{category}', [CategoryController::class, 'show']);
                     Route::get('products', [ProductController::class, 'index']);
+                    Route::get('deals', [DealController::class, 'index']);
+                    Route::get('deals/{deal}', [DealController::class, 'show']);
                     Route::get('products/{product}', [ProductController::class, 'show']);
                     Route::get('modifier-groups', [ModifierGroupController::class, 'index']);
                     Route::get('modifier-groups/{modifierGroup}', [ModifierGroupController::class, 'show']);
@@ -247,12 +251,15 @@ Route::prefix('v1')->group(function () {
                 Route::middleware('permission:menu.create')->group(function () {
                     Route::post('categories', [CategoryController::class, 'store']);
                     Route::post('products', [ProductController::class, 'store']);
+                    Route::post('deals', [DealController::class, 'store']);
+                    Route::post('deals/image', [DealController::class, 'uploadImage']);
                     Route::post('modifier-groups', [ModifierGroupController::class, 'store']);
                     Route::post('modifier-groups/{modifierGroup}/modifiers', [ModifierController::class, 'store']);
                 });
                 Route::middleware('permission:menu.update')->group(function () {
                     Route::patch('categories/{category}', [CategoryController::class, 'update']);
                     Route::patch('products/{product}', [ProductController::class, 'update']);
+                    Route::patch('deals/{deal}', [DealController::class, 'update']);
                     Route::patch('products/{product}/modifier-groups', [ProductController::class, 'updateModifierGroups']);
                     Route::patch('modifier-groups/{modifierGroup}', [ModifierGroupController::class, 'update']);
                     Route::patch('modifiers/{modifier}', [ModifierController::class, 'update']);
@@ -263,6 +270,7 @@ Route::prefix('v1')->group(function () {
                 Route::middleware('permission:menu.delete')->group(function () {
                     Route::delete('categories/{category}', [CategoryController::class, 'destroy']);
                     Route::delete('products/{product}', [ProductController::class, 'destroy']);
+                    Route::delete('deals/{deal}', [DealController::class, 'destroy']);
                     Route::delete('modifier-groups/{modifierGroup}', [ModifierGroupController::class, 'destroy']);
                     Route::delete('modifiers/{modifier}', [ModifierController::class, 'destroy']);
                 });
