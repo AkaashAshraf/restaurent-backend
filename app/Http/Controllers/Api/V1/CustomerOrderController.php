@@ -90,6 +90,16 @@ class CustomerOrderController extends Controller
 
         $branch = Branch::findOrFail($data['branch_id']);
 
+        // The customer app only offers what the restaurant switched on in its
+        // portal (delivery and/or takeaway); dine-in is staff-only.
+        $restaurant->loadMissing('settings');
+        $offered = $restaurant->settings ? $restaurant->settings->customerOrderTypes() : ['DELIVERY', 'TAKEAWAY'];
+        if (! in_array($data['order_type'], $offered, true)) {
+            $names = ['TAKEAWAY' => 'takeaway', 'DELIVERY' => 'delivery'];
+
+            throw new OrderValidationException('This restaurant does not take '.($names[$data['order_type']] ?? 'that kind of').' orders in the app. Available: '.implode(' and ', array_map(fn ($t) => $names[$t], $offered)).'.');
+        }
+
         // A customer can only order while the branch takes that kind of order.
         // (Staff keep the till open — they place orders through OrderController.)
         $timezone = $restaurant->timezone ?: 'UTC';

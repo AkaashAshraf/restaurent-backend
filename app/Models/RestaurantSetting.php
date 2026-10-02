@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RestaurantSetting extends Model
 {
     protected $fillable = [
-        'restaurant_id', 'order_types', 'min_order_amount', 'default_prep_time_minutes',
+        'restaurant_id', 'order_types', 'customer_order_types', 'min_order_amount', 'default_prep_time_minutes',
         'tax_enabled', 'tax_percentage', 'tax_inclusive', 'delivery_enabled',
         'delivery_fee', 'free_delivery_threshold', 'order_number_scheme',
         'order_number_daily_reset', 'branch_selection_mode',
@@ -17,6 +17,7 @@ class RestaurantSetting extends Model
 
     protected $casts = [
         'order_types' => 'array',
+        'customer_order_types' => 'array',
         'kitchen_order_types' => 'array',
         'tax_enabled' => 'boolean',
         'tax_inclusive' => 'boolean',
@@ -29,6 +30,19 @@ class RestaurantSetting extends Model
         'delivery_fee' => 'decimal:2',
         'free_delivery_threshold' => 'decimal:2',
     ];
+
+    /**
+     * What the customer app offers: DELIVERY and/or TAKEAWAY, at least one.
+     * Dine-in is staff-only. Falls back to both when nothing was ever chosen.
+     *
+     * @return list<string>
+     */
+    public function customerOrderTypes(): array
+    {
+        $types = array_values(array_intersect(['DELIVERY', 'TAKEAWAY'], $this->customer_order_types ?? []));
+
+        return $types === [] ? ['DELIVERY', 'TAKEAWAY'] : $types;
+    }
 
     /**
      * The tax rate (%) for a payment method. Before the customer has chosen

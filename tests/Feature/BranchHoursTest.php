@@ -255,7 +255,7 @@ class BranchHoursTest extends TestCase
     {
         [$restaurant, $branch] = $this->makeRestaurantWithOwner('Public Co', planSlug: 'premium');
         $restaurant->update(['timezone' => 'Asia/Karachi']);
-        $restaurant->settings->update(['order_types' => ['DINE_IN', 'TAKEAWAY', 'DELIVERY']]);
+        $restaurant->settings->update(['customer_order_types' => ['TAKEAWAY', 'DELIVERY']]);
         $second = Branch::create([
             'restaurant_id' => $restaurant->id, 'name' => 'Second', 'branch_code' => 'B2', 'status' => 'ACTIVE', 'priority' => 5,
         ]);
@@ -279,7 +279,7 @@ class BranchHoursTest extends TestCase
         $res->assertJsonPath('data.branches.1.id', $branch->id)
             ->assertJsonPath('data.branches.1.hours_configured', true)
             ->assertJsonPath('data.branches.1.services.GENERAL.status.is_open', true)
-            ->assertJsonPath('data.branches.1.services.DINE_IN.custom', false)
+            ->assertJsonPath('data.branches.1.services.TAKEAWAY.custom', false)
             ->assertJsonPath('data.branches.1.services.DELIVERY.custom', true)
             ->assertJsonPath('data.branches.1.services.DELIVERY.status.is_open', false)
             ->assertJsonPath('data.branches.1.services.DELIVERY.status.opens_at', '2026-10-05T14:00:00+05:00');
@@ -291,13 +291,14 @@ class BranchHoursTest extends TestCase
     public function test_public_hours_only_list_services_the_restaurant_offers(): void
     {
         [$restaurant, $branch] = $this->makeRestaurantWithOwner('Public Co');   // standard plan, no delivery
-        $restaurant->settings->update(['order_types' => ['DINE_IN', 'TAKEAWAY']]);
+        // The app offers delivery and takeaway; this plan has no delivery feature.
+        $restaurant->settings->update(['customer_order_types' => ['TAKEAWAY', 'DELIVERY']]);
         $this->setHours($branch, ['GENERAL' => $this->week()]);
 
         $res = $this->getJson('/api/v1/app/hours?restaurant='.$restaurant->slug)->assertOk();
 
-        $this->assertEqualsCanonicalizing(['GENERAL', 'DINE_IN', 'TAKEAWAY'], array_keys($res->json('data.branches.0.services')));
-        $this->assertSame(['DINE_IN', 'TAKEAWAY'], $res->json('data.order_types'));
+        $this->assertEqualsCanonicalizing(['GENERAL', 'TAKEAWAY'], array_keys($res->json('data.branches.0.services')));
+        $this->assertSame(['TAKEAWAY'], $res->json('data.order_types'));
     }
 
     public function test_public_hours_for_an_unknown_restaurant_is_404(): void
@@ -350,7 +351,7 @@ class BranchHoursTest extends TestCase
         [$restaurant, $branch] = $this->makeRestaurantWithOwner('Closed Co');
         $this->setHours($branch, [
             'GENERAL' => $this->week('12:00', '23:00'),
-            'TAKEAWAY' => $this->week('18:00', '22:00'),
+            'DELIVERY' => $this->week('18:00', '22:00'),
         ]);
         $product = $this->product($restaurant);
         $token = $this->customerToken($restaurant);
@@ -358,15 +359,13 @@ class BranchHoursTest extends TestCase
 
         $this->at('2026-10-05 13:00');
         $this->withUserToken($token)->postJson('/api/v1/customer/orders', [
-            'branch_id' => $branch->id, 'order_type' => 'TAKEAWAY', 'items' => $items,
-        ])->assertStatus(422);
+            'branch_id' => $branch->id, 'order_type' => 'DELIVERY', 'items' => $items,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', fn ($m) => str_contains($m, 'Delivery is closed'));
 
-        // Dine-in follows the branch hours, so it is open.
-        $table = \App\Models\Table::create([
-            'restaurant_id' => $restaurant->id, 'branch_id' => $branch->id, 'table_number' => 'T1', 'capacity' => 4,
-        ]);
+        // Takeaway follows the branch hours, so it is open.
         $this->withUserToken($token)->postJson('/api/v1/customer/orders', [
-            'branch_id' => $branch->id, 'order_type' => 'DINE_IN', 'table_id' => $table->id, 'items' => $items,
+            'branch_id' => $branch->id, 'order_type' => 'TAKEAWAY', 'items' => $items,
         ])->assertStatus(201);
     }
 

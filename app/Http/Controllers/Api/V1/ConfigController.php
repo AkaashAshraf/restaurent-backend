@@ -62,9 +62,11 @@ class ConfigController extends Controller
         $config['branding'] = CustomerAppBranding::resolve($restaurant);
         $settings = $restaurant->settings;
         $config['ordering'] = [
-            'order_types' => $settings?->order_types ?? ['DINE_IN', 'TAKEAWAY'],
+            // The customer app only offers delivery and/or takeaway (the
+            // restaurant picks in its portal); dine-in is for staff.
+            'order_types' => $settings ? $settings->customerOrderTypes() : ['DELIVERY', 'TAKEAWAY'],
             'min_order_amount' => (float) ($settings?->min_order_amount ?? 0),
-            'delivery_enabled' => (bool) ($settings?->delivery_enabled ?? false),
+            'delivery_enabled' => $settings ? in_array('DELIVERY', $settings->customerOrderTypes(), true) : true,
             'delivery_fee' => (float) ($settings?->delivery_fee ?? 0),
             'free_delivery_threshold' => $settings?->free_delivery_threshold !== null ? (float) $settings->free_delivery_threshold : null,
             // Customers pay online, which is charged the card rate.
@@ -138,7 +140,7 @@ class ConfigController extends Controller
         $data = $request->validate(['branch_id' => ['nullable', 'integer']]);
 
         $restaurant->loadMissing('settings');
-        $types = collect($restaurant->settings?->order_types ?? ['DINE_IN', 'TAKEAWAY'])
+        $types = collect($restaurant->settings?->customerOrderTypes() ?? ['DELIVERY', 'TAKEAWAY'])
             ->filter(fn ($type) => $this->features->isEnabled($restaurant, $type))
             ->values()
             ->all();
@@ -207,6 +209,72 @@ class ConfigController extends Controller
             isset($data['longitude']) ? (float) $data['longitude'] : null,
             (float) ($data['subtotal'] ?? 0),
         ));
+    }
+
+    /**
+     * GET /api/v1/app/delivery-branches?latitude=&longitude=&subtotal= — which
+     * branches deliver to this point, best first: a branch whose drawn zone
+     * covers it comes before one that simply delivers everywhere, nearest
+     * first within each. Lets the app move an order to the right branch when
+     * the customer picked the wrong one. Public, like the quote.
+     */
+    public function appDeliveryBranches(Request $request, OrderService $orders)
+    {
+        $restaurant = $this->restaurants->resolve($request);
+
+        if (! $restaurant) {
+            return ApiResponse::error('NOT_FOUND', 'No restaurant is configured for this server URL.', 404);
+        }
+
+        $this->tenant->reset()->setRestaurantId($restaurant->id);
+
+        $data = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'subtotal' => ['nullable', 'numeric', 'min:0'],
+        ]);
+        $lat = (float) $data['latitude'];
+        $lng = (float) $data['longitude'];
+
+        $restaurant->loadMissing('settings');
+        $out = [];
+
+        foreach (Branch::with('settings')->where('status', 'ACTIVE')->orderBy('priority')->get() as $branch) {
+            if ($branch->settings?->delivery_enabled === false) {
+                continue;
+            }
+            $quote = $orders->deliveryQuote($restaurant, $branch, $lat, $lng, (float) ($data['subtotal'] ?? 0));
+            if (! $quote['deliverable']) {
+                continue;
+            }
+            $distance = ($branch->latitude !== null && $branch->longitude !== null)
+                ? round($this->distanceKm($lat, $lng, (float) $branch->latitude, (float) $branch->longitude), 1)
+                : null;
+
+            $out[] = [
+                'branch_id' => $branch->id,
+                'name' => $branch->name,
+                'address' => $branch->address,
+                'zone' => $quote['zone'],
+                'zones_configured' => $quote['zones_configured'],
+                'fee' => $quote['fee'],
+                'distance_km' => $distance,
+            ];
+        }
+
+        usort($out, fn ($a, $b) => [! $a['zones_configured'], $a['distance_km'] ?? INF] <=> [! $b['zones_configured'], $b['distance_km'] ?? INF]);
+
+        return ApiResponse::success(['branches' => $out]);
+    }
+
+    private function distanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $r = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
     }
 
     /** GET /api/v1/config — authenticated variant, resolves restaurant from the current user. */

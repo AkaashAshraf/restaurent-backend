@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
 {
@@ -67,6 +68,9 @@ class SettingsController extends Controller
         $data = $request->validate([
             'order_types' => ['sometimes', 'array'],
             'order_types.*' => ['in:DINE_IN,TAKEAWAY,DELIVERY'],
+            // What the customer app offers: delivery and/or takeaway, never none.
+            'customer_order_types' => ['sometimes', 'array', 'min:1'],
+            'customer_order_types.*' => ['in:TAKEAWAY,DELIVERY'],
             'min_order_amount' => ['sometimes', 'numeric', 'min:0'],
             'default_prep_time_minutes' => ['sometimes', 'integer', 'min:0'],
             'tax_enabled' => ['sometimes', 'boolean'],
@@ -93,6 +97,24 @@ class SettingsController extends Controller
             $data['tax_percentage'] = $data['cash_tax_percentage'];
         } elseif (array_key_exists('tax_percentage', $data) && ! array_key_exists('cash_tax_percentage', $data)) {
             $data['cash_tax_percentage'] = $data['tax_percentage'];
+        }
+        if (array_key_exists('customer_order_types', $data)) {
+            $data['customer_order_types'] = array_values(array_unique($data['customer_order_types']));
+            // Keep the older switch in step so nothing reads a stale value.
+            $data['delivery_enabled'] = in_array('DELIVERY', $data['customer_order_types'], true);
+        } elseif (array_key_exists('delivery_enabled', $data)) {
+            // The "We deliver" switch on the Delivery page is the same thing as
+            // having Delivery ticked for the customer app.
+            $types = $settings->customerOrderTypes();
+            $types = $data['delivery_enabled']
+                ? array_values(array_unique([...$types, 'DELIVERY']))
+                : array_values(array_diff($types, ['DELIVERY']));
+            if ($types === []) {
+                throw ValidationException::withMessages([
+                    'delivery_enabled' => ['The app needs at least one of Delivery or Takeaway. Switch Takeaway on before turning delivery off.'],
+                ]);
+            }
+            $data['customer_order_types'] = $types;
         }
         if (array_key_exists('kitchen_order_types', $data)) {
             $data['kitchen_order_types'] = array_values(array_unique($data['kitchen_order_types']));
