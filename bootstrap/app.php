@@ -10,6 +10,7 @@ use App\Http\Middleware\EnsureRestaurantActive;
 use App\Http\Middleware\EnsureSubscriptionActive;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\IdentifyTenant;
+use App\Http\Middleware\PlatformMaintenance;
 use App\Support\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -31,6 +32,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Pure Bearer-token API (generic apps use a configurable Base URL,
         // not first-party SPA cookies), so Sanctum's stateful/session
         // middleware is intentionally not enabled here.
+        // Platform maintenance mode (Super Admin > Settings) applies to every API call.
+        $middleware->api(append: [PlatformMaintenance::class]);
+
         $middleware->alias([
             'tenant' => IdentifyTenant::class,
             'restaurant.active' => EnsureRestaurantActive::class,

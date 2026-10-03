@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\PlatformSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -29,6 +30,11 @@ class AuthController extends Controller
             ]);
         }
 
+        // Platform maintenance: only the Super Admin can get in.
+        if (! $user->is_super_admin && PlatformSettings::inMaintenance()) {
+            return ApiResponse::error('MAINTENANCE', PlatformSettings::maintenanceMessage(), 503);
+        }
+
         if (! $user->is_super_admin && ! $user->isActive()) {
             return ApiResponse::error('FORBIDDEN', 'Your account has been deactivated.', 403);
         }
@@ -39,7 +45,9 @@ class AuthController extends Controller
 
         $user->forceFill(['last_login_at' => now()])->save();
 
-        $token = $user->createToken('api')->plainTextToken;
+        // The Super Admin can limit how long a sign-in lasts (0 = until sign-out).
+        $days = (int) PlatformSettings::get('session_days');
+        $token = $user->createToken('api', ['*'], $days > 0 ? now()->addDays($days) : null)->plainTextToken;
 
         return ApiResponse::success([
             'token' => $token,

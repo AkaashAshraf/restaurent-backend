@@ -60,6 +60,11 @@ class ConfigController extends Controller
         // ordering rules it needs before login — public, so only what a
         // customer would see anyway.
         $config['branding'] = CustomerAppBranding::resolve($restaurant);
+        // Platform maintenance puts every customer app on its "be right back" screen.
+        if (\App\Support\PlatformSettings::inMaintenance()) {
+            $config['branding']['maintenance_mode'] = true;
+            $config['branding']['maintenance_message'] = \App\Support\PlatformSettings::maintenanceMessage();
+        }
         $settings = $restaurant->settings;
         $config['ordering'] = [
             // The customer app only offers delivery and/or takeaway (the

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\CustomerAuthController;
 use App\Http\Controllers\Api\V1\DealController;
 use App\Http\Controllers\Api\V1\ProductHighlightsController;
 use App\Http\Controllers\Api\V1\ReviewController;
+use App\Http\Controllers\Api\V1\SuperAdmin\PlatformSettingsController;
 use App\Http\Controllers\Api\V1\CustomerOrderController;
 use App\Http\Controllers\Api\V1\CustomerPaymentController;
 use App\Http\Controllers\Api\V1\DeliveryZoneController;
@@ -52,6 +53,8 @@ Route::prefix('v1')->group(function () {
     Route::get('app/hours', [ConfigController::class, 'appHours']);
 
     Route::post('auth/login', [AuthController::class, 'login']);
+    // The platform's own name/logo/support contacts (for the sign-in page) and whether it is down.
+    Route::get('platform', [PlatformSettingsController::class, 'publicInfo']);
 
     // ---- Customer app/website (Phase 6): its own auth, resolved by the
     // same Host/?restaurant=slug mechanism as the public app/config and
@@ -185,6 +188,15 @@ Route::prefix('v1')->group(function () {
             Route::patch('subscriptions/{subscription}/features/{feature}', [SubscriptionController::class, 'toggleFeature']);
 
             Route::get('features', [FeatureController::class, 'index']);
+
+            // Super Admin settings: platform branding, security switches, my account.
+            Route::get('settings', [PlatformSettingsController::class, 'show']);
+            Route::patch('settings', [PlatformSettingsController::class, 'update']);
+            Route::post('settings/logo', [PlatformSettingsController::class, 'uploadLogo']);
+            Route::delete('settings/logo', [PlatformSettingsController::class, 'removeLogo']);
+            Route::patch('settings/account', [PlatformSettingsController::class, 'updateAccount']);
+            Route::put('settings/account/password', [PlatformSettingsController::class, 'changePassword']);
+            Route::post('settings/account/sign-out-others', [PlatformSettingsController::class, 'signOutOtherSessions']);
         });
 
         // ---- Restaurant-scoped: tenant context + restaurant status enforced first ----
